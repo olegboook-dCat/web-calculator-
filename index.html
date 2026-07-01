@@ -24,6 +24,7 @@
     .btn.ghost{background:transparent}
     .btn.warn{background:#1a1306;border-color:#51360a;color:#facc15}
     .btn.ok{background:#062012;border-color:#14532d;color:#86efac}
+    .btn:disabled{opacity:.4;cursor:not-allowed}
     .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
     .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     table{width:100%;border-collapse:collapse;margin-top:8px}
@@ -53,11 +54,14 @@
     <div class="topbar">
       <h1>Калькулятор фасадных материалов — Портативная v2</h1>
       <div class="right">
+        <button class="btn" id="btnUndo" title="Отменить (Ctrl+Z)">↶ Отменить</button>
+        <button class="btn" id="btnRedo" title="Повторить (Ctrl+Shift+Z)">↷ Повторить</button>
         <button class="btn ok" id="btnSave">Сохранить</button>
         <button class="btn" id="btnCSV">Экспорт CSV</button>
         <button class="btn" id="btnPDF">Печать / PDF</button>
       </div>
     </div>
+    <div class="muted small" id="draftNote"></div>
 
     <div class="card">
       <h2>Шаг 1. Объект и пресет</h2>
@@ -168,6 +172,102 @@ function applyPreset(type){
   recalc();
 }
 
+// --- Draft autosave + undo/redo history
+const DRAFT_KEY = 'facadeCalculatorDraft';
+const HISTORY_LIMIT = 50;
+let historyStack = [];
+let redoStack = [];
+let lastSnapshot = null;
+let historyTimer = null;
+
+function snapshotState(){
+  return JSON.stringify({
+    facadeType: $('#facadeType').value,
+    projectName: $('#projectName').value,
+    client: $('#client').value,
+    panelW: $('#panelW').value,
+    panelH: $('#panelH').value,
+    step: $('#step').value,
+    fasteners: $('#fasteners').value,
+    waste: $('#waste').value,
+    corners: $('#corners').value,
+    pricePanel: $('#pricePanel').value,
+    priceProfile: $('#priceProfile').value,
+    priceFast: $('#priceFast').value,
+    walls: state.walls,
+    openings: state.openings
+  });
+}
+
+function applySnapshot(json){
+  const s = JSON.parse(json);
+  $('#facadeType').value = s.facadeType;
+  $('#projectName').value = s.projectName;
+  $('#client').value = s.client;
+  $('#panelW').value = s.panelW;
+  $('#panelH').value = s.panelH;
+  $('#step').value = s.step;
+  $('#fasteners').value = s.fasteners;
+  $('#waste').value = s.waste;
+  $('#corners').value = s.corners;
+  $('#pricePanel').value = s.pricePanel;
+  $('#priceProfile').value = s.priceProfile;
+  $('#priceFast').value = s.priceFast;
+  state.walls = s.walls;
+  state.openings = s.openings;
+  renderTables();
+  recalc();
+}
+
+function saveDraft(json){
+  try{ localStorage.setItem(DRAFT_KEY, json); }catch(e){}
+}
+function loadDraftRaw(){
+  try{ return localStorage.getItem(DRAFT_KEY); }catch(e){ return null; }
+}
+
+function updateUndoRedoButtons(){
+  $('#btnUndo').disabled = historyStack.length === 0;
+  $('#btnRedo').disabled = redoStack.length === 0;
+}
+
+// Creates an undo checkpoint out of whatever changed since the last checkpoint,
+// and persists the current state as the autosaved draft.
+function commitHistory(){
+  const cur = snapshotState();
+  saveDraft(cur);
+  if(lastSnapshot === null){ lastSnapshot = cur; updateUndoRedoButtons(); return; }
+  if(cur === lastSnapshot) return;
+  historyStack.push(lastSnapshot);
+  if(historyStack.length > HISTORY_LIMIT) historyStack.shift();
+  redoStack = [];
+  lastSnapshot = cur;
+  updateUndoRedoButtons();
+}
+function commitHistoryImmediate(){ clearTimeout(historyTimer); commitHistory(); }
+function scheduleHistoryCommit(){ clearTimeout(historyTimer); historyTimer = setTimeout(commitHistory, 600); }
+
+function undo(){
+  if(!historyStack.length) return;
+  clearTimeout(historyTimer);
+  redoStack.push(snapshotState());
+  const prev = historyStack.pop();
+  lastSnapshot = prev;
+  applySnapshot(prev);
+  saveDraft(prev);
+  updateUndoRedoButtons();
+}
+function redo(){
+  if(!redoStack.length) return;
+  clearTimeout(historyTimer);
+  historyStack.push(snapshotState());
+  const next = redoStack.pop();
+  lastSnapshot = next;
+  applySnapshot(next);
+  saveDraft(next);
+  updateUndoRedoButtons();
+}
+
 function rowInputs(w,h,c,onDel){
   const tr = document.createElement('tr');
   tr.innerHTML = `
@@ -175,7 +275,7 @@ function rowInputs(w,h,c,onDel){
     <td><input type="text" inputmode="decimal" value="${h}"></td>
     <td><input type="number" step="1" min="1" value="${c}"></td>
     <td><button class="btn ghost">✕</button></td>`;
-  tr.lastElementChild.firstElementChild.addEventListener('click', e=>{ e.preventDefault(); onDel(tr); recalc(); });
+  tr.lastElementChild.firstElementChild.addEventListener('click', e=>{ e.preventDefault(); onDel(tr); recalc(); commitHistoryImmediate(); });
   return tr;
 }
 
@@ -184,25 +284,25 @@ function renderTables(){
   state.walls.forEach((w,idx)=>{
     const tr = rowInputs(w.width,w.height,w.count,(tr)=>{ state.walls.splice(idx,1); renderTables(); });
     const inputs = tr.querySelectorAll('input');
-    on(inputs[0],'input', e=>{ state.walls[idx].width = parseNum(e.target.value); recalc(); });
-    on(inputs[1],'input', e=>{ state.walls[idx].height = parseNum(e.target.value); recalc(); });
-    on(inputs[2],'input', e=>{ state.walls[idx].count  = Math.max(1, Math.floor(parseNum(e.target.value)||1)); recalc(); });
+    on(inputs[0],'input', e=>{ state.walls[idx].width = parseNum(e.target.value); recalc(); scheduleHistoryCommit(); });
+    on(inputs[1],'input', e=>{ state.walls[idx].height = parseNum(e.target.value); recalc(); scheduleHistoryCommit(); });
+    on(inputs[2],'input', e=>{ state.walls[idx].count  = Math.max(1, Math.floor(parseNum(e.target.value)||1)); recalc(); scheduleHistoryCommit(); });
     wBody.appendChild(tr);
   });
   const oBody = $('#openingsTbl tbody'); oBody.innerHTML='';
   state.openings.forEach((o,idx)=>{
     const tr = rowInputs(o.width,o.height,o.count,(tr)=>{ state.openings.splice(idx,1); renderTables(); });
     const inputs = tr.querySelectorAll('input');
-    on(inputs[0],'input', e=>{ state.openings[idx].width = parseNum(e.target.value); recalc(); });
-    on(inputs[1],'input', e=>{ state.openings[idx].height = parseNum(e.target.value); recalc(); });
-    on(inputs[2],'input', e=>{ state.openings[idx].count  = Math.max(1, Math.floor(parseNum(e.target.value)||1)); recalc(); });
+    on(inputs[0],'input', e=>{ state.openings[idx].width = parseNum(e.target.value); recalc(); scheduleHistoryCommit(); });
+    on(inputs[1],'input', e=>{ state.openings[idx].height = parseNum(e.target.value); recalc(); scheduleHistoryCommit(); });
+    on(inputs[2],'input', e=>{ state.openings[idx].count  = Math.max(1, Math.floor(parseNum(e.target.value)||1)); recalc(); scheduleHistoryCommit(); });
     oBody.appendChild(tr);
   });
   refreshList();
 }
 
-function addWall(){ state.walls.push({width:10, height:3, count:1}); renderTables(); recalc(); }
-function addOpening(){ state.openings.push({width:1.5, height:1.5, count:1}); renderTables(); recalc(); }
+function addWall(){ state.walls.push({width:10, height:3, count:1}); renderTables(); recalc(); commitHistoryImmediate(); }
+function addOpening(){ state.openings.push({width:1.5, height:1.5, count:1}); renderTables(); recalc(); commitHistoryImmediate(); }
 
 // Calculation
 function calculate(){
@@ -407,6 +507,11 @@ function loadProjectIdx(i){
   state.openings = p.openings || [];
   renderTables();
   recalc();
+  historyStack = [];
+  redoStack = [];
+  lastSnapshot = snapshotState();
+  saveDraft(lastSnapshot);
+  updateUndoRedoButtons();
 }
 
 // CSV
@@ -467,9 +572,9 @@ function printPDF(){
 
 // Bind base inputs for auto-recalc
 ['panelW','panelH','step','fasteners','waste','corners','pricePanel','priceProfile','priceFast','projectName','client'].forEach(id=>{
-  on(document.getElementById(id),'input', recalc);
+  on(document.getElementById(id),'input', e=>{ recalc(); scheduleHistoryCommit(); });
 });
-on($('#facadeType'),'change', e=>{ state.facadeType = e.target.value; applyPreset(state.facadeType); });
+on($('#facadeType'),'change', e=>{ state.facadeType = e.target.value; applyPreset(state.facadeType); commitHistoryImmediate(); });
 
 // Buttons
 on($('#addWall'),'click', addWall);
@@ -478,13 +583,40 @@ on($('#calcBtn'),'click', recalc);
 on($('#btnSave'),'click', saveProject);
 on($('#btnCSV'),'click', exportCSV);
 on($('#btnPDF'),'click', printPDF);
+on($('#btnUndo'),'click', undo);
+on($('#btnRedo'),'click', redo);
 
-// Defaults
-applyPreset('siding');
-state.walls = [{width:6,height:3,count:2},{width:10,height:3,count:2}];
-state.openings = [];
-renderTables();
-recalc();
+window.addEventListener('keydown', e=>{
+  const key = e.key.toLowerCase();
+  if(!(e.ctrlKey || e.metaKey) || key !== 'z') return;
+  e.preventDefault();
+  if(e.shiftKey) redo(); else undo();
+});
+window.addEventListener('beforeunload', commitHistoryImmediate);
+
+// Defaults / restore autosaved draft
+const draftRaw = loadDraftRaw();
+if(draftRaw){
+  try{
+    applySnapshot(draftRaw);
+    $('#draftNote').textContent = 'Восстановлен черновик последней незавершённой работы (сохраняется автоматически).';
+  }catch(e){
+    applyPreset('siding');
+    state.walls = [{width:6,height:3,count:2},{width:10,height:3,count:2}];
+    state.openings = [];
+    renderTables();
+    recalc();
+  }
+}else{
+  applyPreset('siding');
+  state.walls = [{width:6,height:3,count:2},{width:10,height:3,count:2}];
+  state.openings = [];
+  renderTables();
+  recalc();
+}
+lastSnapshot = snapshotState();
+saveDraft(lastSnapshot);
+updateUndoRedoButtons();
 </script>
 </body>
 </html>
