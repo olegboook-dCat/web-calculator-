@@ -32,11 +32,20 @@
     .muted{color:var(--muted);font-size:12px}
     .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
     .pill{padding:4px 10px;border-radius:999px;border:1px solid #334155;background:#0b1221;display:inline-block;margin:0 6px 6px 0}
-    .right{display:flex;justify-content:flex-end;gap:8px}
+    .right{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
     .hr{height:1px;background:#1f2937;margin:10px 0}
-    .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+    .topbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
     .small{font-size:12px}
+    .table-scroll{width:100%;overflow-x:auto}
+    .draft-row{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin:-4px 0 10px}
     @media (max-width:800px){.row{grid-template-columns:1fr}.grid-3,.grid-2{grid-template-columns:1fr}}
+    @media (max-width:480px){
+      .wrap{padding:10px}
+      h1{font-size:19px}
+      input,select{padding:8px;font-size:15px}
+      th,td{padding:5px;font-size:13px}
+      .btn{padding:8px 10px;font-size:13px}
+    }
     @media print {.btn,.actions,.topbar{display:none}.card{border:1px solid #999;background:white;color:black}}
     #printReport{display:none}
     #printReport table{width:100%;border-collapse:collapse;margin:10px 0}
@@ -61,7 +70,10 @@
         <button class="btn" id="btnPDF">Печать / PDF</button>
       </div>
     </div>
-    <div class="muted small" id="draftNote"></div>
+    <div class="draft-row">
+      <span class="muted small" id="draftNote"></span>
+      <button class="btn ghost small" id="btnClear" style="padding:4px 10px">Очистить всё</button>
+    </div>
 
     <div class="card">
       <h2>Шаг 1. Объект и пресет</h2>
@@ -94,20 +106,24 @@
     <div class="card">
       <h2>Шаг 2. Стены (м)</h2>
       <div class="actions"><button class="btn" id="addWall">+ Добавить стену</button></div>
+      <div class="table-scroll">
       <table id="wallsTbl">
         <thead><tr><th>Ширина</th><th>Высота</th><th>Кол-во</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
+      </div>
       <div class="muted">Пример: 10 × 3 м, 2 шт. Для мгновенного пересчёта просто меняйте значения — результаты ниже обновляются сами.</div>
     </div>
 
     <div class="card">
       <h2>Шаг 3. Проёмы (м)</h2>
       <div class="actions"><button class="btn" id="addOpening">+ Добавить проём</button></div>
+      <div class="table-scroll">
       <table id="openingsTbl">
         <thead><tr><th>Ширина</th><th>Высота</th><th>Кол-во</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
+      </div>
       <div class="muted">Окна/двери — их площадь вычитается. Мгновенный пересчёт включён.</div>
     </div>
 
@@ -268,6 +284,29 @@ function redo(){
   updateUndoRedoButtons();
 }
 
+function clearAll(){
+  if(!confirm('Очистить текущую форму (стены, проёмы, цены, черновик)? Сохранённые проекты в списке ниже останутся нетронутыми.')) return;
+  clearTimeout(historyTimer);
+  $('#projectName').value = '';
+  $('#client').value = '';
+  $('#facadeType').value = 'siding';
+  applyPreset('siding');
+  $('#corners').value = 4;
+  $('#pricePanel').value = '';
+  $('#priceProfile').value = '';
+  $('#priceFast').value = '';
+  state.walls = [];
+  state.openings = [];
+  renderTables();
+  recalc();
+  historyStack = [];
+  redoStack = [];
+  lastSnapshot = snapshotState();
+  saveDraft(lastSnapshot);
+  updateUndoRedoButtons();
+  $('#draftNote').textContent = '';
+}
+
 function rowInputs(w,h,c,onDel){
   const tr = document.createElement('tr');
   tr.innerHTML = `
@@ -358,13 +397,15 @@ function renderResults(r){
     <div class="pill">Профили: <b>${r.profilesLen.toFixed(2)} м</b></div>
     <div class="pill">Крепёж: <b>${r.fasteners}</b></div>`;
   $('#costs').innerHTML = `
+    <div class="table-scroll">
     <table>
       <tr><th>Позиция</th><th>Кол-во</th><th>Цена/ед.</th><th>Сумма</th></tr>
       <tr><td>Панели</td><td>${r.panels}</td><td>${parseNum($('#pricePanel').value).toFixed(2)}</td><td>${r.costPanels.toFixed(2)}</td></tr>
       <tr><td>Профили (м)</td><td>${r.profilesLen.toFixed(2)}</td><td>${parseNum($('#priceProfile').value).toFixed(2)}</td><td>${r.costProfiles.toFixed(2)}</td></tr>
       <tr><td>Крепёж (шт)</td><td>${r.fasteners}</td><td>${parseNum($('#priceFast').value).toFixed(2)}</td><td>${r.costFasteners.toFixed(2)}</td></tr>
       <tr><th colspan="3" style="text-align:right">Итого</th><th>${r.total.toFixed(2)}</th></tr>
-    </table>`;
+    </table>
+    </div>`;
   $('#note').textContent = `Тип: ${presets[$('#facadeType').value].name}. Шаг: ${r.step} м, крепёж/панель: ${r.fast}, отходы: ${r.wasteP}%, углов: ${r.corners}`;
 }
 
@@ -585,6 +626,7 @@ on($('#btnCSV'),'click', exportCSV);
 on($('#btnPDF'),'click', printPDF);
 on($('#btnUndo'),'click', undo);
 on($('#btnRedo'),'click', redo);
+on($('#btnClear'),'click', clearAll);
 
 window.addEventListener('keydown', e=>{
   const key = e.key.toLowerCase();
@@ -602,14 +644,14 @@ if(draftRaw){
     $('#draftNote').textContent = 'Восстановлен черновик последней незавершённой работы (сохраняется автоматически).';
   }catch(e){
     applyPreset('siding');
-    state.walls = [{width:6,height:3,count:2},{width:10,height:3,count:2}];
+    state.walls = [];
     state.openings = [];
     renderTables();
     recalc();
   }
 }else{
   applyPreset('siding');
-  state.walls = [{width:6,height:3,count:2},{width:10,height:3,count:2}];
+  state.walls = [];
   state.openings = [];
   renderTables();
   recalc();
