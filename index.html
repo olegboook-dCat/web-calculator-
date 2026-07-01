@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Калькулятор фасадных материалов — Портативная v2</title>
+  <style>
+    :root{--bg:#0f172a;--card:#111827;--text:#e5e7eb;--muted:#9ca3af;--pri:#38bdf8;--ok:#34d399;--warn:#f59e0b;--err:#ef4444}
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(135deg,#0b1221,#0e172d);color:var(--text);font:16px/1.4 system-ui,Segoe UI,Roboto,Arial}
+    .wrap{max-width:1000px;margin:24px auto;padding:16px}
+    .card{background:rgba(17,24,39,.85);backdrop-filter:blur(6px);border:1px solid #1f2937;border-radius:16px;padding:16px;margin:12px 0}
+    h1{margin:0 0 12px 0;font-size:24px}
+    h2{margin:0 0 8px 0;font-size:18px;color:#cbd5e1}
+    label{display:block;margin:6px 0 2px 0;color:#cbd5e1}
+    input,select{width:100%;padding:10px;border-radius:10px;border:1px solid #334155;background:#0b1221;color:#e5e7eb}
+    input:invalid{outline:1px solid var(--err)}
+    .row{display:grid;grid-template-columns:repeat(12,1fr);gap:10px}
+    .btn{display:inline-flex;gap:6px;align-items:center;padding:9px 12px;border-radius:12px;border:1px solid #334155;background:#0b1221;color:#e5e7eb;cursor:pointer}
+    .btn.primary{background:linear-gradient(135deg,#22d3ee,#3b82f6);border:0;color:#07111f}
+    .btn.ghost{background:transparent}
+    .btn.warn{background:#1a1306;border-color:#51360a;color:#facc15}
+    .btn.ok{background:#062012;border-color:#14532d;color:#86efac}
+    .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    table{width:100%;border-collapse:collapse;margin-top:8px}
+    th,td{border-bottom:1px solid #1f2937;padding:8px;text-align:left}
+    .muted{color:var(--muted);font-size:12px}
+    .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+    .pill{padding:4px 10px;border-radius:999px;border:1px solid #334155;background:#0b1221;display:inline-block;margin:0 6px 6px 0}
+    .right{display:flex;justify-content:flex-end;gap:8px}
+    .hr{height:1px;background:#1f2937;margin:10px 0}
+    .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+    .small{font-size:12px}
+    @media (max-width:800px){.row{grid-template-columns:1fr}.grid-3,.grid-2{grid-template-columns:1fr}}
+    @media print {.btn,.actions,.topbar{display:none}.card{border:1px solid #999;background:white;color:black}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <h1>Калькулятор фасадных материалов — Портативная v2</h1>
+      <div class="right">
+        <button class="btn" id="btnLoad">Открыть проект</button>
+        <button class="btn ok" id="btnSave">Сохранить</button>
+        <button class="btn" id="btnCSV">Экспорт CSV</button>
+        <button class="btn" id="btnPDF">Печать / PDF</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Шаг 1. Объект и пресет</h2>
+      <div class="grid-3">
+        <div><label>Название объекта</label><input id="projectName" placeholder="Напр. Коттедж на Набережной"></div>
+        <div><label>Клиент</label><input id="client" placeholder="ФИО или компания"></div>
+        <div>
+          <label>Тип фасада (пресет)</label>
+          <select id="facadeType">
+            <option value="siding">Сайдинг</option>
+            <option value="fibrocement">Фиброцемент</option>
+            <option value="composite">Композит</option>
+            <option value="metalProfile">Металлопрофиль</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid-3" style="margin-top:10px">
+        <div><label>Ширина панели (м)</label><input type="text" id="panelW" inputmode="decimal"></div>
+        <div><label>Высота панели (м)</label><input type="text" id="panelH" inputmode="decimal"></div>
+        <div><label>Шаг профилей (м)</label><input type="text" id="step" inputmode="decimal"></div>
+      </div>
+      <div class="grid-3" style="margin-top:10px">
+        <div><label>Крепёж на панель (шт)</label><input type="number" id="fasteners" step="1" min="1"></div>
+        <div><label>Отходы (%)</label><input type="text" id="waste" inputmode="decimal"></div>
+        <div class="muted">Совет: можно вводить числа и с запятой, и с точкой.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Шаг 2. Стены (м)</h2>
+      <div class="actions"><button class="btn" id="addWall">+ Добавить стену</button></div>
+      <table id="wallsTbl">
+        <thead><tr><th>Ширина</th><th>Высота</th><th>Кол-во</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="muted">Пример: 10 × 3 м, 2 шт. Для мгновенного пересчёта просто меняйте значения — результаты ниже обновляются сами.</div>
+    </div>
+
+    <div class="card">
+      <h2>Шаг 3. Проёмы (м)</h2>
+      <div class="actions"><button class="btn" id="addOpening">+ Добавить проём</button></div>
+      <table id="openingsTbl">
+        <thead><tr><th>Ширина</th><th>Высота</th><th>Кол-во</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="muted">Окна/двери — их площадь вычитается. Мгновенный пересчёт включён.</div>
+    </div>
+
+    <div class="card">
+      <h2>Шаг 4. Цены</h2>
+      <div class="grid-3">
+        <div><label>Цена за панель</label><input type="text" id="pricePanel" inputmode="decimal" placeholder="₽"></div>
+        <div><label>Цена профиля за метр</label><input type="text" id="priceProfile" inputmode="decimal" placeholder="₽/м"></div>
+        <div><label>Цена крепежа (шт)</label><input type="text" id="priceFast" inputmode="decimal" placeholder="₽/шт"></div>
+      </div>
+      <div class="actions"><button class="btn primary" id="calcBtn">Пересчитать</button></div>
+    </div>
+
+    <div class="card" id="resultsCard" style="display:none">
+      <h2>Результаты</h2>
+      <div id="results"></div>
+      <div class="hr"></div>
+      <div id="costs"></div>
+      <div class="muted small" id="note"></div>
+    </div>
+
+    <div class="card">
+      <h2>Сохранённые проекты</h2>
+      <div class="muted">Сохраняются локально на этом устройстве (localStorage).</div>
+      <div id="list"></div>
+    </div>
+  </div>
+
+<script>
+const presets = {
+  siding:        { name:'Сайдинг',        step:0.6, fast:8,  waste:7,  w:0.30, h:3.0 },
+  fibrocement:   { name:'Фиброцемент',    step:0.6, fast:10, waste:8,  w:0.60, h:1.2 },
+  composite:     { name:'Композит',       step:0.6, fast:12, waste:10, w:1.20, h:0.6 },
+  metalProfile:  { name:'Металлопрофиль', step:1.0, fast:6,  waste:6,  w:1.15, h:2.0 }
+};
+
+// --- Helpers
+const $ = (s,root=document)=>root.querySelector(s);
+function parseNum(v){
+  const s = String(v==null?'':v).replace(',', '.').replace(/\s+/g,'');
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+function ceil(n){ return Math.ceil(n); }
+function on(el, ev, fn){ el.addEventListener(ev, fn); }
+
+// --- State
+const state = { facadeType:'siding', walls:[], openings:[] };
+
+function applyPreset(type){
+  const p = presets[type];
+  $('#panelW').value = p.w; $('#panelH').value = p.h;
+  $('#step').value   = p.step;
+  $('#fasteners').value = p.fast;
+  $('#waste').value = p.waste;
+  recalc();
+}
+
+function rowInputs(w,h,c,onDel){
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" inputmode="decimal" value="${w}"></td>
+    <td><input type="text" inputmode="decimal" value="${h}"></td>
+    <td><input type="number" step="1" min="1" value="${c}"></td>
+    <td><button class="btn ghost">✕</button></td>`;
+  tr.lastElementChild.firstElementChild.addEventListener('click', e=>{ e.preventDefault(); onDel(tr); recalc(); });
+  return tr;
+}
+
+function renderTables(){
+  const wBody = $('#wallsTbl tbody'); wBody.innerHTML='';
+  state.walls.forEach((w,idx)=>{
+    const tr = rowInputs(w.width,w.height,w.count,(tr)=>{ state.walls.splice(idx,1); renderTables(); });
+    const inputs = tr.querySelectorAll('input');
+    on(inputs[0],'input', e=>{ state.walls[idx].width = parseNum(e.target.value); recalc(); });
+    on(inputs[1],'input', e=>{ state.walls[idx].height = parseNum(e.target.value); recalc(); });
+    on(inputs[2],'input', e=>{ state.walls[idx].count  = Math.max(1, Math.floor(parseNum(e.target.value)||1)); recalc(); });
+    wBody.appendChild(tr);
+  });
+  const oBody = $('#openingsTbl tbody'); oBody.innerHTML='';
+  state.openings.forEach((o,idx)=>{
+    const tr = rowInputs(o.width,o.height,o.count,(tr)=>{ state.openings.splice(idx,1); renderTables(); });
+    const inputs = tr.querySelectorAll('input');
+    on(inputs[0],'input', e=>{ state.openings[idx].width = parseNum(e.target.value); recalc(); });
+    on(inputs[1],'input', e=>{ state.openings[idx].height = parseNum(e.target.value); recalc(); });
+    on(inputs[2],'input', e=>{ state.openings[idx].count  = Math.max(1, Math.floor(parseNum(e.target.value)||1)); recalc(); });
+    oBody.appendChild(tr);
+  });
+  refreshList();
+}
+
+function addWall(){ state.walls.push({width:10, height:3, count:1}); renderTables(); recalc(); }
+function addOpening(){ state.openings.push({width:1.5, height:1.5, count:1}); renderTables(); recalc(); }
+
+// Calculation
+function calculate(){
+  const panelW = parseNum($('#panelW').value);
+  const panelH = parseNum($('#panelH').value);
+  const step   = Math.max(0.1, parseNum($('#step').value));
+  const fast   = Math.max(1, Math.floor(parseNum($('#fasteners').value)||1));
+  const wasteP = Math.max(0, parseNum($('#waste').value));
+  const pricePanel   = Math.max(0, parseNum($('#pricePanel').value));
+  const priceProfile = Math.max(0, parseNum($('#priceProfile').value));
+  const priceFast    = Math.max(0, parseNum($('#priceFast').value));
+
+  const wallsArea = state.walls.reduce((s,w)=> s + Math.max(0,w.width)*Math.max(0,w.height)*Math.max(1,w.count|0), 0);
+  const openingsArea = state.openings.reduce((s,o)=> s + Math.max(0,o.width)*Math.max(0,o.height)*Math.max(1,o.count|0), 0);
+  const netArea = Math.max(0, wallsArea - Math.min(openingsArea, wallsArea));
+
+  const panelArea = Math.max(0.0001, panelW*panelH);
+  const wasteCoeff = 1 + wasteP/100;
+  const panels = ceil((netArea / panelArea) * wasteCoeff);
+
+  let profilesLen = 0;
+  state.walls.forEach(w=>{
+    const posts = Math.floor(Math.max(0,w.width) / step) + 1;
+    const perWall = posts * Math.max(0,w.height);
+    profilesLen += perWall * Math.max(1,w.count|0);
+  });
+
+  const fasteners = ceil(panels * fast);
+
+  const costPanels    = panels * pricePanel;
+  const costProfiles  = profilesLen * priceProfile;
+  const costFasteners = fasteners * priceFast;
+  const total = costPanels + costProfiles + costFasteners;
+
+  return {wallsArea, openingsArea, netArea, panels, profilesLen, fasteners, costPanels, costProfiles, costFasteners, total, step, fast, wasteP};
+}
+
+function renderResults(r){
+  const card = $('#resultsCard');
+  if(!r) { card.style.display='none'; return; }
+  card.style.display='block';
+  $('#results').innerHTML = `
+    <div class="pill">Чистая площадь: <b>${r.netArea.toFixed(2)} м²</b></div>
+    <div class="pill">Панелей: <b>${r.panels}</b></div>
+    <div class="pill">Профили: <b>${r.profilesLen.toFixed(2)} м</b></div>
+    <div class="pill">Крепёж: <b>${r.fasteners}</b></div>`;
+  $('#costs').innerHTML = `
+    <table>
+      <tr><th>Позиция</th><th>Кол-во</th><th>Цена/ед.</th><th>Сумма</th></tr>
+      <tr><td>Панели</td><td>${r.panels}</td><td>${parseNum($('#pricePanel').value).toFixed(2)}</td><td>${r.costPanels.toFixed(2)}</td></tr>
+      <tr><td>Профили (м)</td><td>${r.profilesLen.toFixed(2)}</td><td>${parseNum($('#priceProfile').value).toFixed(2)}</td><td>${r.costProfiles.toFixed(2)}</td></tr>
+      <tr><td>Крепёж (шт)</td><td>${r.fasteners}</td><td>${parseNum($('#priceFast').value).toFixed(2)}</td><td>${r.costFasteners.toFixed(2)}</td></tr>
+      <tr><th colspan="3" style="text-align:right">Итого</th><th>${r.total.toFixed(2)}</th></tr>
+    </table>`;
+  $('#note').textContent = `Тип: ${presets[$('#facadeType').value].name}. Шаг: ${r.step} м, крепёж/панель: ${r.fast}, отходы: ${r.wasteP}%`;
+}
+
+function recalc(){ renderResults(calculate()); }
+
+// Save / Load
+function projectFromUI(){
+  return {
+    name: $('#projectName').value.trim() || 'Без названия',
+    client: $('#client').value.trim(),
+    facadeType: $('#facadeType').value,
+    walls: state.walls,
+    openings: state.openings,
+    params: {
+      panelW: parseNum($('#panelW').value),
+      panelH: parseNum($('#panelH').value),
+      step:   parseNum($('#step').value),
+      fasteners: Math.max(1, Math.floor(parseNum($('#fasteners').value)||1)),
+      waste:  Math.max(0, parseNum($('#waste').value)),
+      pricePanel:   Math.max(0, parseNum($('#pricePanel').value)),
+      priceProfile: Math.max(0, parseNum($('#priceProfile').value)),
+      priceFast:    Math.max(0, parseNum($('#priceFast').value)),
+    },
+    result: calculate(),
+    date: new Date().toISOString()
+  };
+}
+
+function saveProject(){
+  const p = projectFromUI();
+  const list = JSON.parse(localStorage.getItem('facadeProjects')||'[]');
+  list.unshift(p);
+  localStorage.setItem('facadeProjects', JSON.stringify(list.slice(0,100)));
+  refreshList();
+  alert('Сохранено.');
+}
+
+function refreshList(){
+  const list = JSON.parse(localStorage.getItem('facadeProjects')||'[]');
+  const wrap = document.getElementById('list'); wrap.innerHTML='';
+  list.forEach((p,idx)=>{
+    const div = document.createElement('div');
+    div.className='card';
+    div.innerHTML = `
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+        <div><b>${p.name}</b> — ${p.client||'—'} <span class="muted small">(${new Date(p.date).toLocaleString()})</span></div>
+        <div class="actions">
+          <button class="btn" data-open="${idx}">Открыть</button>
+          <button class="btn" data-dup="${idx}">Дублировать</button>
+          <button class="btn warn" data-del="${idx}">Удалить</button>
+        </div>
+      </div>`;
+    wrap.appendChild(div);
+    div.querySelector('[data-open]').onclick = ()=> loadProjectIdx(idx);
+    div.querySelector('[data-dup]').onclick  = ()=> { const a=JSON.parse(localStorage.getItem('facadeProjects')||'[]'); a.unshift(a[idx]); localStorage.setItem('facadeProjects', JSON.stringify(a)); refreshList(); };
+    div.querySelector('[data-del]').onclick  = ()=> { const a=JSON.parse(localStorage.getItem('facadeProjects')||'[]'); a.splice(idx,1); localStorage.setItem('facadeProjects', JSON.stringify(a)); refreshList(); };
+  });
+}
+
+function loadProjectIdx(i){
+  const list = JSON.parse(localStorage.getItem('facadeProjects')||'[]');
+  const p = list[i]; if(!p) return;
+  $('#projectName').value = p.name || '';
+  $('#client').value = p.client || '';
+  $('#facadeType').value = p.facadeType || 'siding';
+  applyPreset($('#facadeType').value);
+  $('#panelW').value = p.params.panelW;
+  $('#panelH').value = p.params.panelH;
+  $('#step').value   = p.params.step;
+  $('#fasteners').value = p.params.fasteners;
+  $('#waste').value  = p.params.waste;
+  $('#pricePanel').value   = p.params.pricePanel;
+  $('#priceProfile').value = p.params.priceProfile;
+  $('#priceFast').value    = p.params.priceFast;
+  state.walls = p.walls || [];
+  state.openings = p.openings || [];
+  renderTables();
+  recalc();
+}
+
+// CSV
+function exportCSV(){
+  const p = projectFromUI();
+  const rows = [
+    ['Объект', p.name],
+    ['Клиент', p.client],
+    ['Дата', new Date(p.date).toLocaleString()],
+    [],
+    ['Позиция','Кол-во','Цена/ед.','Сумма'],
+    ['Панели', p.result.panels, p.params.pricePanel.toFixed(2), p.result.costPanels.toFixed(2)],
+    ['Профили (м)', p.result.profilesLen.toFixed(2), p.params.priceProfile.toFixed(2), p.result.costProfiles.toFixed(2)],
+    ['Крепёж', p.result.fasteners, p.params.priceFast.toFixed(2), p.result.costFasteners.toFixed(2)],
+    ['Итого','','', p.result.total.toFixed(2)]
+  ];
+  const text = rows.map(r=>r.join(';')).join('\n');
+  const blob = new Blob([text], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='estimate.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Print / PDF
+function printPDF(){ window.print(); }
+
+// Bind base inputs for auto-recalc
+['panelW','panelH','step','fasteners','waste','pricePanel','priceProfile','priceFast','projectName','client'].forEach(id=>{
+  on(document.getElementById(id),'input', recalc);
+});
+on($('#facadeType'),'change', e=>{ state.facadeType = e.target.value; applyPreset(state.facadeType); });
+
+// Buttons
+on($('#addWall'),'click', addWall);
+on($('#addOpening'),'click', addOpening);
+on($('#calcBtn'),'click', recalc);
+on($('#btnSave'),'click', saveProject);
+on($('#btnLoad'),'click', ()=>{
+  const list = JSON.parse(localStorage.getItem('facadeProjects')||'[]');
+  if(!list.length) return alert('Нет сохранённых проектов.');
+  const names = list.map((p,i)=> `${i+1}. ${p.name} — ${p.client||'—'}`).join('\n');
+  const idx = prompt('Введите номер проекта для открытия:\n'+names);
+  const n = Number(idx)-1;
+  if(Number.isFinite(n) && n>=0 && n<list.length) loadProjectIdx(n);
+});
+on($('#btnCSV'),'click', exportCSV);
+on($('#btnPDF'),'click', printPDF);
+
+// Defaults
+applyPreset('siding');
+state.walls = [{width:6,height:3,count:2},{width:10,height:3,count:2}];
+state.openings = [];
+renderTables();
+recalc();
+</script>
+</body>
+</html>
