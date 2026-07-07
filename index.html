@@ -170,7 +170,6 @@
         <div><label>Цена наращивателя (шт)</label><input type="text" id="priceExtender" inputmode="decimal" placeholder="₽/шт"></div>
         <div><label>Цена утеплителя (₽/м²)</label><input type="text" id="priceInsulation" inputmode="decimal" placeholder="₽/м²"></div>
       </div>
-      <div class="actions"><button class="btn primary" id="calcBtn">Пересчитать</button></div>
     </div>
 
     <div class="card">
@@ -889,7 +888,6 @@ on($('#facadeType'),'change', e=>{ state.facadeType = e.target.value; applyPrese
 on($('#addWall'),'click', addWall);
 on($('#addOpening'),'click', addOpening);
 on($('#addConsumable'),'click', addConsumable);
-on($('#calcBtn'),'click', recalc);
 on($('#btnSave'),'click', saveProject);
 on($('#btnCSV'),'click', exportCSV);
 on($('#btnPDF'),'click', printPDF);
