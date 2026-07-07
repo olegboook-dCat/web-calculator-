@@ -123,7 +123,12 @@
           </select>
         </div>
       </div>
-      <div class="muted" style="margin-top:6px">Совет: можно вводить числа и с запятой, и с точкой. Отходы (%) применяются и к панелям, и к профилю (с учётом углов дома). Единицу измерения можно менять в любой момент — уже введённые размеры пересчитаются автоматически.</div>
+      <div class="grid-3" style="margin-top:10px">
+        <div><label>Кронштейны, шт/м²</label><input type="text" id="bracketsPerM2" inputmode="decimal" value="3"></div>
+        <div><label id="insulationLabel">Толщина утеплителя</label><input type="text" id="insulationThickness" inputmode="decimal"></div>
+        <div><label id="bracketLenLabel">Станд. длина кронштейна</label><input type="text" id="bracketStandardLength" inputmode="decimal"></div>
+      </div>
+      <div class="muted" style="margin-top:6px">Совет: можно вводить числа и с запятой, и с точкой. Отходы (%) применяются и к панелям, и к профилю (с учётом углов дома). Единицу измерения можно менять в любой момент — уже введённые размеры пересчитаются автоматически. Наращиватели кронштейнов добавятся в смету сами, если толщина утеплителя больше стандартной длины кронштейна.</div>
     </div>
 
     <div class="card">
@@ -156,6 +161,10 @@
         <div><label>Цена за панель</label><input type="text" id="pricePanel" inputmode="decimal" placeholder="₽"></div>
         <div><label>Цена профиля за метр</label><input type="text" id="priceProfile" inputmode="decimal" placeholder="₽/м"></div>
         <div><label>Цена крепежа (шт)</label><input type="text" id="priceFast" inputmode="decimal" placeholder="₽/шт"></div>
+      </div>
+      <div class="grid-3" style="margin-top:10px">
+        <div><label>Цена кронштейна (шт)</label><input type="text" id="priceBracket" inputmode="decimal" placeholder="₽/шт"></div>
+        <div><label>Цена наращивателя (шт)</label><input type="text" id="priceExtender" inputmode="decimal" placeholder="₽/шт"></div>
       </div>
       <div class="actions"><button class="btn primary" id="calcBtn">Пересчитать</button></div>
     </div>
@@ -223,7 +232,7 @@ function displayToMeters(v){
 }
 
 // --- State
-const state = { facadeType: DEFAULT_PRESET, panelW:0, panelH:0, step:0, walls:[], openings:[] };
+const state = { facadeType: DEFAULT_PRESET, panelW:0, panelH:0, step:0, insulationThickness:0.1, bracketStandardLength:0.12, walls:[], openings:[] };
 
 function applyPreset(type){
   const p = presets[type];
@@ -241,7 +250,9 @@ function renderPanelFields(){
   $('#panelW').value = formatForUnit(state.panelW);
   $('#panelH').value = formatForUnit(state.panelH);
   $('#step').value = formatForUnit(state.step);
-  [$('#panelW'), $('#panelH'), $('#step')].forEach(el=>{ el.inputMode = cfg.inputmode; });
+  $('#insulationThickness').value = formatForUnit(state.insulationThickness);
+  $('#bracketStandardLength').value = formatForUnit(state.bracketStandardLength);
+  [$('#panelW'), $('#panelH'), $('#step'), $('#insulationThickness'), $('#bracketStandardLength')].forEach(el=>{ el.inputMode = cfg.inputmode; });
 }
 
 function updateUnitLabels(){
@@ -249,6 +260,8 @@ function updateUnitLabels(){
   $('#panelWLabel').textContent = `Ширина панели (${cfg.label})`;
   $('#panelHLabel').textContent = `Высота панели (${cfg.label})`;
   $('#stepLabel').textContent = `Шаг профилей (${cfg.label})`;
+  $('#insulationLabel').textContent = `Толщина утеплителя (${cfg.label})`;
+  $('#bracketLenLabel').textContent = `Станд. длина кронштейна (${cfg.label})`;
   $('#wallsWidthHeader').textContent = `Ширина, ${cfg.label}`;
   $('#wallsHeightHeader').textContent = `Высота, ${cfg.label}`;
   $('#openingsWidthHeader').textContent = `Ширина, ${cfg.label}`;
@@ -286,9 +299,14 @@ function snapshotState(){
     waste: $('#waste').value,
     corners: $('#corners').value,
     orientation: $('#orientation').value,
+    bracketsPerM2: $('#bracketsPerM2').value,
+    insulationThickness: state.insulationThickness,
+    bracketStandardLength: state.bracketStandardLength,
     pricePanel: $('#pricePanel').value,
     priceProfile: $('#priceProfile').value,
     priceFast: $('#priceFast').value,
+    priceBracket: $('#priceBracket').value,
+    priceExtender: $('#priceExtender').value,
     walls: state.walls,
     openings: state.openings
   });
@@ -307,9 +325,14 @@ function applySnapshot(json){
   $('#waste').value = s.waste;
   $('#corners').value = s.corners;
   $('#orientation').value = s.orientation || 'vertical';
+  $('#bracketsPerM2').value = s.bracketsPerM2 != null ? s.bracketsPerM2 : 3;
+  state.insulationThickness = s.insulationThickness != null ? s.insulationThickness : 0.1;
+  state.bracketStandardLength = s.bracketStandardLength != null ? s.bracketStandardLength : 0.12;
   $('#pricePanel').value = s.pricePanel;
   $('#priceProfile').value = s.priceProfile;
   $('#priceFast').value = s.priceFast;
+  $('#priceBracket').value = s.priceBracket;
+  $('#priceExtender').value = s.priceExtender;
   state.walls = s.walls;
   state.openings = s.openings;
   renderPanelFields();
@@ -378,9 +401,15 @@ function clearAll(){
   applyPreset(DEFAULT_PRESET);
   $('#corners').value = 4;
   $('#orientation').value = 'vertical';
+  $('#bracketsPerM2').value = 3;
+  state.insulationThickness = 0.1;
+  state.bracketStandardLength = 0.12;
+  renderPanelFields();
   $('#pricePanel').value = '';
   $('#priceProfile').value = '';
   $('#priceFast').value = '';
+  $('#priceBracket').value = '';
+  $('#priceExtender').value = '';
   state.walls = [];
   state.openings = [];
   renderTables();
@@ -439,9 +468,14 @@ function calculate(){
   const wasteP = Math.max(0, parseNum($('#waste').value));
   const corners = Math.max(0, parseNum($('#corners').value));
   const orientation = $('#orientation').value;
+  const bracketsPerM2 = Math.max(0, parseNum($('#bracketsPerM2').value));
+  const insulationThickness = state.insulationThickness;
+  const bracketStandardLength = state.bracketStandardLength;
   const pricePanel   = Math.max(0, parseNum($('#pricePanel').value));
   const priceProfile = Math.max(0, parseNum($('#priceProfile').value));
   const priceFast    = Math.max(0, parseNum($('#priceFast').value));
+  const priceBracket  = Math.max(0, parseNum($('#priceBracket').value));
+  const priceExtender = Math.max(0, parseNum($('#priceExtender').value));
 
   const wallsArea = state.walls.reduce((s,w)=> s + Math.max(0,w.width)*Math.max(0,w.height)*Math.max(1,w.count|0), 0);
   const openingsArea = state.openings.reduce((s,o)=> s + Math.max(0,o.width)*Math.max(0,o.height)*Math.max(1,o.count|0), 0);
@@ -473,12 +507,17 @@ function calculate(){
 
   const fasteners = ceil(panels * fast);
 
+  const brackets = ceil(netArea * bracketsPerM2);
+  const extenders = (insulationThickness > bracketStandardLength) ? brackets : 0;
+
   const costPanels    = panels * pricePanel;
   const costProfiles  = profilesLen * priceProfile;
   const costFasteners = fasteners * priceFast;
-  const total = costPanels + costProfiles + costFasteners;
+  const costBrackets  = brackets * priceBracket;
+  const costExtenders = extenders * priceExtender;
+  const total = costPanels + costProfiles + costFasteners + costBrackets + costExtenders;
 
-  return {wallsArea, openingsArea, netArea, panels, profilesLen, fasteners, costPanels, costProfiles, costFasteners, total, step, fast, wasteP, corners, orientation};
+  return {wallsArea, openingsArea, netArea, panels, profilesLen, fasteners, brackets, extenders, costPanels, costProfiles, costFasteners, costBrackets, costExtenders, total, step, fast, wasteP, corners, orientation};
 }
 
 function renderResults(r){
@@ -489,7 +528,9 @@ function renderResults(r){
     <div class="pill">Чистая площадь: <b>${r.netArea.toFixed(2)} м²</b></div>
     <div class="pill">Панелей: <b>${r.panels}</b></div>
     <div class="pill">Профили: <b>${r.profilesLen.toFixed(2)} м</b></div>
-    <div class="pill">Крепёж: <b>${r.fasteners}</b></div>`;
+    <div class="pill">Крепёж: <b>${r.fasteners}</b></div>
+    <div class="pill">Кронштейны: <b>${r.brackets}</b></div>
+    <div class="pill">Наращиватели: <b>${r.extenders}</b></div>`;
   $('#costs').innerHTML = `
     <div class="table-scroll">
     <table>
@@ -497,6 +538,8 @@ function renderResults(r){
       <tr><td>Панели</td><td>${r.panels}</td><td>${parseNum($('#pricePanel').value).toFixed(2)}</td><td>${r.costPanels.toFixed(2)}</td></tr>
       <tr><td>Профили (м)</td><td>${r.profilesLen.toFixed(2)}</td><td>${parseNum($('#priceProfile').value).toFixed(2)}</td><td>${r.costProfiles.toFixed(2)}</td></tr>
       <tr><td>Крепёж (шт)</td><td>${r.fasteners}</td><td>${parseNum($('#priceFast').value).toFixed(2)}</td><td>${r.costFasteners.toFixed(2)}</td></tr>
+      <tr><td>Кронштейны (шт)</td><td>${r.brackets}</td><td>${parseNum($('#priceBracket').value).toFixed(2)}</td><td>${r.costBrackets.toFixed(2)}</td></tr>
+      <tr><td>Наращиватели (шт)</td><td>${r.extenders}</td><td>${parseNum($('#priceExtender').value).toFixed(2)}</td><td>${r.costExtenders.toFixed(2)}</td></tr>
       <tr><th colspan="3" style="text-align:right">Итого</th><th>${r.total.toFixed(2)}</th></tr>
     </table>
     </div>`;
@@ -582,9 +625,14 @@ function projectFromUI(){
       corners: Math.max(0, parseNum($('#corners').value)),
       orientation: $('#orientation').value,
       unit: $('#unit').value,
+      bracketsPerM2: Math.max(0, parseNum($('#bracketsPerM2').value)),
+      insulationThickness: state.insulationThickness,
+      bracketStandardLength: state.bracketStandardLength,
       pricePanel:   Math.max(0, parseNum($('#pricePanel').value)),
       priceProfile: Math.max(0, parseNum($('#priceProfile').value)),
       priceFast:    Math.max(0, parseNum($('#priceFast').value)),
+      priceBracket:  Math.max(0, parseNum($('#priceBracket').value)),
+      priceExtender: Math.max(0, parseNum($('#priceExtender').value)),
     },
     result: calculate(),
     date: new Date().toISOString()
@@ -636,14 +684,19 @@ function loadProjectIdx(i){
   state.panelW = p.params.panelW;
   state.panelH = p.params.panelH;
   state.step   = p.params.step;
-  renderPanelFields();
   $('#fasteners').value = p.params.fasteners;
   $('#waste').value  = p.params.waste;
   $('#corners').value = p.params.corners != null ? p.params.corners : 4;
   $('#orientation').value = p.params.orientation || 'vertical';
+  $('#bracketsPerM2').value = p.params.bracketsPerM2 != null ? p.params.bracketsPerM2 : 3;
+  state.insulationThickness = p.params.insulationThickness != null ? p.params.insulationThickness : 0.1;
+  state.bracketStandardLength = p.params.bracketStandardLength != null ? p.params.bracketStandardLength : 0.12;
+  renderPanelFields();
   $('#pricePanel').value   = p.params.pricePanel;
   $('#priceProfile').value = p.params.priceProfile;
   $('#priceFast').value    = p.params.priceFast;
+  $('#priceBracket').value  = p.params.priceBracket || '';
+  $('#priceExtender').value = p.params.priceExtender || '';
   state.walls = p.walls || [];
   state.openings = p.openings || [];
   renderTables();
@@ -670,6 +723,8 @@ function exportCSV(){
     ['Панели', p.result.panels, p.params.pricePanel.toFixed(2), p.result.costPanels.toFixed(2)],
     ['Профили (м)', p.result.profilesLen.toFixed(2), p.params.priceProfile.toFixed(2), p.result.costProfiles.toFixed(2)],
     ['Крепёж', p.result.fasteners, p.params.priceFast.toFixed(2), p.result.costFasteners.toFixed(2)],
+    ['Кронштейны', p.result.brackets, p.params.priceBracket.toFixed(2), p.result.costBrackets.toFixed(2)],
+    ['Наращиватели', p.result.extenders, p.params.priceExtender.toFixed(2), p.result.costExtenders.toFixed(2)],
     ['Итого','','', p.result.total.toFixed(2)]
   ];
   const text = rows.map(r=>r.join(';')).join('\n');
@@ -706,6 +761,8 @@ function renderPrintReport(r){
       <tr><td>Панели</td><td>${r.panels}</td><td>${parseNum($('#pricePanel').value).toFixed(2)}</td><td>${r.costPanels.toFixed(2)}</td></tr>
       <tr><td>Профили (м)</td><td>${r.profilesLen.toFixed(2)}</td><td>${parseNum($('#priceProfile').value).toFixed(2)}</td><td>${r.costProfiles.toFixed(2)}</td></tr>
       <tr><td>Крепёж (шт)</td><td>${r.fasteners}</td><td>${parseNum($('#priceFast').value).toFixed(2)}</td><td>${r.costFasteners.toFixed(2)}</td></tr>
+      <tr><td>Кронштейны (шт)</td><td>${r.brackets}</td><td>${parseNum($('#priceBracket').value).toFixed(2)}</td><td>${r.costBrackets.toFixed(2)}</td></tr>
+      <tr><td>Наращиватели (шт)</td><td>${r.extenders}</td><td>${parseNum($('#priceExtender').value).toFixed(2)}</td><td>${r.costExtenders.toFixed(2)}</td></tr>
       <tr><th colspan="3" style="text-align:right">Итого</th><th>${r.total.toFixed(2)} ₽</th></tr>
     </tbody></table>`;
   $('#printReport').innerHTML = html;
@@ -717,12 +774,14 @@ function printPDF(){
 }
 
 // Bind base inputs for auto-recalc
-['fasteners','waste','corners','pricePanel','priceProfile','priceFast','projectName','client'].forEach(id=>{
+['fasteners','waste','corners','bracketsPerM2','pricePanel','priceProfile','priceFast','priceBracket','priceExtender','projectName','client'].forEach(id=>{
   on(document.getElementById(id),'input', e=>{ recalc(); scheduleHistoryCommit(); });
 });
 on($('#panelW'),'input', e=>{ state.panelW = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
 on($('#panelH'),'input', e=>{ state.panelH = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
 on($('#step'),'input', e=>{ state.step = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
+on($('#insulationThickness'),'input', e=>{ state.insulationThickness = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
+on($('#bracketStandardLength'),'input', e=>{ state.bracketStandardLength = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
 on($('#unit'),'change', e=>{ renderPanelFields(); renderTables(); updateUnitLabels(); recalc(); commitHistoryImmediate(); });
 on($('#orientation'),'change', e=>{ recalc(); commitHistoryImmediate(); });
 on($('#facadeType'),'change', e=>{ state.facadeType = e.target.value; applyPreset(state.facadeType); commitHistoryImmediate(); });
