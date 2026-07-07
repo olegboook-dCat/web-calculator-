@@ -72,14 +72,15 @@
     </div>
     <div class="draft-row">
       <span class="muted small" id="draftNote"></span>
+      <div style="flex:1;min-width:180px">
+        <input id="projectName" placeholder="Название проекта (для сохранения)">
+      </div>
       <button class="btn ghost small" id="btnClear" style="padding:4px 10px">Очистить всё</button>
     </div>
 
     <div class="card">
       <h2>Шаг 1. Объект и пресет</h2>
-      <div class="grid-3">
-        <div><label>Название объекта</label><input id="projectName" placeholder="Напр. Коттедж на Набережной"></div>
-        <div><label>Клиент</label><input id="client" placeholder="ФИО или компания"></div>
+      <div class="grid-2">
         <div>
           <label>Тип фасада (пресет)</label>
           <select id="facadeType">
@@ -93,8 +94,6 @@
             <option value="metalProfile">Металлопрофиль</option>
           </select>
         </div>
-      </div>
-      <div class="grid-3" style="margin-top:10px">
         <div>
           <label>Единица измерения размеров</label>
           <select id="unit">
@@ -306,7 +305,6 @@ function snapshotState(){
     facadeType: $('#facadeType').value,
     unit: $('#unit').value,
     projectName: $('#projectName').value,
-    client: $('#client').value,
     panelW: state.panelW,
     panelH: state.panelH,
     step: state.step,
@@ -335,7 +333,6 @@ function applySnapshot(json){
   $('#facadeType').value = s.facadeType;
   $('#unit').value = s.unit || 'mm';
   $('#projectName').value = s.projectName;
-  $('#client').value = s.client;
   state.panelW = s.panelW;
   state.panelH = s.panelH;
   state.step = s.step;
@@ -417,7 +414,6 @@ function clearAll(){
   if(!confirm('Очистить текущую форму (стены, проёмы, цены, черновик)? Сохранённые проекты в списке ниже останутся нетронутыми.')) return;
   clearTimeout(historyTimer);
   $('#projectName').value = '';
-  $('#client').value = '';
   $('#unit').value = 'mm';
   $('#facadeType').value = DEFAULT_PRESET;
   applyPreset(DEFAULT_PRESET);
@@ -694,7 +690,6 @@ function recalc(){
 function projectFromUI(){
   return {
     name: $('#projectName').value.trim() || 'Без названия',
-    client: $('#client').value.trim(),
     facadeType: $('#facadeType').value,
     walls: state.walls,
     openings: state.openings,
@@ -741,7 +736,7 @@ function refreshList(){
     div.className='card';
     div.innerHTML = `
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
-        <div><b>${escapeHtml(p.name)}</b> — ${escapeHtml(p.client||'—')} <span class="muted small">(${new Date(p.date).toLocaleString()})</span></div>
+        <div><b>${escapeHtml(p.name)}</b>${p.client ? ' — ' + escapeHtml(p.client) : ''} <span class="muted small">(${new Date(p.date).toLocaleString()})</span></div>
         <div class="actions">
           <button class="btn" data-open="${idx}">Открыть</button>
           <button class="btn" data-dup="${idx}">Дублировать</button>
@@ -762,7 +757,6 @@ function loadProjectIdx(i){
   const list = JSON.parse(localStorage.getItem('facadeProjects')||'[]');
   const p = list[i]; if(!p) return;
   $('#projectName').value = p.name || '';
-  $('#client').value = p.client || '';
   $('#unit').value = p.params.unit || 'mm';
   $('#facadeType').value = presets[p.facadeType] ? p.facadeType : DEFAULT_PRESET;
   applyPreset($('#facadeType').value);
@@ -803,7 +797,6 @@ function exportCSV(){
   const p = projectFromUI();
   const rows = [
     ['Объект', p.name],
-    ['Клиент', p.client],
     ['Тип фасада', presets[p.facadeType] ? presets[p.facadeType].name : p.facadeType],
     ['Обрешётка', p.params.orientation === 'horizontal' ? 'Горизонтальная' : 'Вертикальная'],
     ['Дата', new Date(p.date).toLocaleString()],
@@ -830,13 +823,12 @@ function exportCSV(){
 // Print / PDF
 function renderPrintReport(r){
   const name = escapeHtml($('#projectName').value.trim() || 'Без названия');
-  const client = escapeHtml($('#client').value.trim() || '—');
   const typeName = presets[$('#facadeType').value].name;
   const isCeiling = $('#facadeType').value === 'ceilings';
   const orientationName = r.orientation === 'horizontal' ? 'горизонтальная' : 'вертикальная';
 
   let html = `<h1>Смета: ${name}</h1>
-    <p>Клиент: ${client} · Тип фасада: ${typeName} · Обрешётка: ${orientationName} · Дата: ${new Date().toLocaleDateString('ru-RU')}</p>
+    <p>Тип фасада: ${typeName} · Обрешётка: ${orientationName} · Дата: ${new Date().toLocaleDateString('ru-RU')}</p>
     <h2>${isCeiling ? 'Участки потолка' : 'Стены'}</h2>
     <table><thead><tr><th>Ширина, м</th><th>Высота, м</th><th>Кол-во</th><th>Площадь, м²</th></tr></thead><tbody>`;
   state.walls.forEach(w=>{
@@ -872,7 +864,7 @@ function printPDF(){
 }
 
 // Bind base inputs for auto-recalc
-['fasteners','waste','damagePercent','corners','bracketsPerM2','pricePanel','priceProfile','priceFast','priceBracket','priceExtender','priceInsulation','projectName','client'].forEach(id=>{
+['fasteners','waste','damagePercent','corners','bracketsPerM2','pricePanel','priceProfile','priceFast','priceBracket','priceExtender','priceInsulation','projectName'].forEach(id=>{
   on(document.getElementById(id),'input', e=>{ recalc(); scheduleHistoryCommit(); });
 });
 on($('#panelW'),'input', e=>{ state.panelW = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
