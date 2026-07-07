@@ -151,7 +151,7 @@
       <div class="actions"><button class="btn" id="addOpening">+ Добавить проём</button></div>
       <div class="table-scroll">
       <table id="openingsTbl">
-        <thead><tr><th id="openingsWidthHeader">Ширина</th><th id="openingsHeightHeader">Высота</th><th>Кол-во</th><th></th></tr></thead>
+        <thead><tr><th>Тип</th><th id="openingsWidthHeader">Ширина</th><th id="openingsHeightHeader">Высота</th><th>Кол-во</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
       </div>
@@ -457,6 +457,22 @@ function rowInputs(w,h,c,onDel){
   return tr;
 }
 
+function openingRowInputs(o, onDel){
+  const cfg = getUnitCfg();
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><select>
+      <option value="window"${o.type==='door'?'':' selected'}>Окно</option>
+      <option value="door"${o.type==='door'?' selected':''}>Дверь</option>
+    </select></td>
+    <td><input type="text" inputmode="${cfg.inputmode}" value="${formatForUnit(o.width)}"></td>
+    <td><input type="text" inputmode="${cfg.inputmode}" value="${formatForUnit(o.height)}"></td>
+    <td><input type="number" step="1" min="1" value="${o.count}"></td>
+    <td><button class="btn ghost">✕</button></td>`;
+  tr.lastElementChild.firstElementChild.addEventListener('click', e=>{ e.preventDefault(); onDel(tr); recalc(); commitHistoryImmediate(); });
+  return tr;
+}
+
 function renderTables(){
   const wBody = $('#wallsTbl tbody'); wBody.innerHTML='';
   state.walls.forEach((w,idx)=>{
@@ -469,8 +485,10 @@ function renderTables(){
   });
   const oBody = $('#openingsTbl tbody'); oBody.innerHTML='';
   state.openings.forEach((o,idx)=>{
-    const tr = rowInputs(o.width,o.height,o.count,(tr)=>{ state.openings.splice(idx,1); renderTables(); });
+    const tr = openingRowInputs(o,(tr)=>{ state.openings.splice(idx,1); renderTables(); });
+    const select = tr.querySelector('select');
     const inputs = tr.querySelectorAll('input');
+    on(select,'change', e=>{ state.openings[idx].type = e.target.value; recalc(); commitHistoryImmediate(); });
     on(inputs[0],'input', e=>{ state.openings[idx].width = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
     on(inputs[1],'input', e=>{ state.openings[idx].height = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
     on(inputs[2],'input', e=>{ state.openings[idx].count  = Math.max(1, Math.floor(parseNum(e.target.value)||1)); recalc(); scheduleHistoryCommit(); });
@@ -480,7 +498,7 @@ function renderTables(){
 }
 
 function addWall(){ state.walls.push({width:10, height:3, count:1}); renderTables(); recalc(); commitHistoryImmediate(); }
-function addOpening(){ state.openings.push({width:1.5, height:1.5, count:1}); renderTables(); recalc(); commitHistoryImmediate(); }
+function addOpening(){ state.openings.push({type:'window', width:1.5, height:1.5, count:1}); renderTables(); recalc(); commitHistoryImmediate(); }
 
 function consumableRow(c, onDel){
   const tr = document.createElement('tr');
@@ -815,9 +833,9 @@ function renderPrintReport(r){
   });
   html += `</tbody></table>
     <h2>${isCeiling ? 'Вырезы (светильники, люки)' : 'Проёмы'}</h2>
-    <table><thead><tr><th>Ширина, м</th><th>Высота, м</th><th>Кол-во</th><th>Площадь, м²</th></tr></thead><tbody>`;
+    <table><thead><tr><th>Тип</th><th>Ширина, м</th><th>Высота, м</th><th>Кол-во</th><th>Площадь, м²</th></tr></thead><tbody>`;
   state.openings.forEach(o=>{
-    html += `<tr><td>${o.width}</td><td>${o.height}</td><td>${o.count}</td><td>${(o.width*o.height*o.count).toFixed(2)}</td></tr>`;
+    html += `<tr><td>${o.type==='door'?'Дверь':'Окно'}</td><td>${o.width}</td><td>${o.height}</td><td>${o.count}</td><td>${(o.width*o.height*o.count).toFixed(2)}</td></tr>`;
   });
   html += `</tbody></table>
     <h2>Результат</h2>
