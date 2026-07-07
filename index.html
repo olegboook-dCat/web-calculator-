@@ -83,44 +83,67 @@
         <div>
           <label>Тип фасада (пресет)</label>
           <select id="facadeType">
-            <option value="siding">Сайдинг</option>
-            <option value="fibrocement">Фиброцемент</option>
+            <option value="ventilated">Вентилируемый фасад</option>
             <option value="composite">Композит</option>
+            <option value="wood">Дерево</option>
+            <option value="travertine">Травертин</option>
+            <option value="ceilings">Потолки</option>
+            <option value="aquapanelDrywall">Аквапанель/Гипсокартон</option>
+            <option value="fibrocement">Фиброцемент</option>
             <option value="metalProfile">Металлопрофиль</option>
           </select>
         </div>
       </div>
       <div class="grid-3" style="margin-top:10px">
-        <div><label>Ширина панели (м)</label><input type="text" id="panelW" inputmode="decimal"></div>
-        <div><label>Высота панели (м)</label><input type="text" id="panelH" inputmode="decimal"></div>
-        <div><label>Шаг профилей (м)</label><input type="text" id="step" inputmode="decimal"></div>
+        <div>
+          <label>Единица измерения размеров</label>
+          <select id="unit">
+            <option value="m">Метры (м)</option>
+            <option value="cm">Сантиметры (см)</option>
+            <option value="mm" selected>Миллиметры (мм)</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid-3" style="margin-top:10px">
+        <div><label id="panelWLabel">Ширина панели</label><input type="text" id="panelW" inputmode="decimal"></div>
+        <div><label id="panelHLabel">Высота панели</label><input type="text" id="panelH" inputmode="decimal"></div>
+        <div><label id="stepLabel">Шаг профилей</label><input type="text" id="step" inputmode="decimal"></div>
       </div>
       <div class="grid-3" style="margin-top:10px">
         <div><label>Крепёж на панель (шт)</label><input type="number" id="fasteners" step="1" min="1"></div>
         <div><label>Отходы (%)</label><input type="text" id="waste" inputmode="decimal"></div>
         <div><label>Наружных углов (шт)</label><input type="number" id="corners" step="1" min="0" value="4"></div>
       </div>
-      <div class="muted" style="margin-top:6px">Совет: можно вводить числа и с запятой, и с точкой. Отходы (%) применяются и к панелям, и к профилю (с учётом углов дома).</div>
+      <div class="grid-3" style="margin-top:10px">
+        <div>
+          <label>Ориентация обрешётки/профиля</label>
+          <select id="orientation">
+            <option value="vertical">Вертикальная (стойки)</option>
+            <option value="horizontal">Горизонтальная (направляющие)</option>
+          </select>
+        </div>
+      </div>
+      <div class="muted" style="margin-top:6px">Совет: можно вводить числа и с запятой, и с точкой. Отходы (%) применяются и к панелям, и к профилю (с учётом углов дома). Единицу измерения можно менять в любой момент — уже введённые размеры пересчитаются автоматически.</div>
     </div>
 
     <div class="card">
-      <h2>Шаг 2. Стены (м)</h2>
+      <h2 id="wallsSectionTitle">Шаг 2. Стены</h2>
       <div class="actions"><button class="btn" id="addWall">+ Добавить стену</button></div>
       <div class="table-scroll">
       <table id="wallsTbl">
-        <thead><tr><th>Ширина</th><th>Высота</th><th>Кол-во</th><th></th></tr></thead>
+        <thead><tr><th id="wallsWidthHeader">Ширина</th><th id="wallsHeightHeader">Высота</th><th>Кол-во</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
       </div>
-      <div class="muted">Пример: 10 × 3 м, 2 шт. Для мгновенного пересчёта просто меняйте значения — результаты ниже обновляются сами.</div>
+      <div class="muted" id="wallsHint">Для мгновенного пересчёта просто меняйте значения — результаты ниже обновляются сами.</div>
     </div>
 
     <div class="card">
-      <h2>Шаг 3. Проёмы (м)</h2>
+      <h2 id="openingsSectionTitle">Шаг 3. Проёмы</h2>
       <div class="actions"><button class="btn" id="addOpening">+ Добавить проём</button></div>
       <div class="table-scroll">
       <table id="openingsTbl">
-        <thead><tr><th>Ширина</th><th>Высота</th><th>Кол-во</th><th></th></tr></thead>
+        <thead><tr><th id="openingsWidthHeader">Ширина</th><th id="openingsHeightHeader">Высота</th><th>Кол-во</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
       </div>
@@ -157,11 +180,16 @@
 
 <script>
 const presets = {
-  siding:        { name:'Сайдинг',        step:0.6, fast:8,  waste:7,  w:0.30, h:3.0 },
-  fibrocement:   { name:'Фиброцемент',    step:0.6, fast:10, waste:8,  w:0.60, h:1.2 },
-  composite:     { name:'Композит',       step:0.6, fast:12, waste:10, w:1.20, h:0.6 },
-  metalProfile:  { name:'Металлопрофиль', step:1.0, fast:6,  waste:6,  w:1.15, h:2.0 }
+  ventilated:       { name:'Вентилируемый фасад',      step:0.6, fast:8,  waste:10, w:1.00, h:0.50 },
+  composite:        { name:'Композит',                 step:0.6, fast:12, waste:10, w:1.20, h:0.6  },
+  wood:             { name:'Дерево',                   step:0.6, fast:10, waste:12, w:3.00, h:0.15 },
+  travertine:       { name:'Травертин',                step:0.6, fast:4,  waste:12, w:0.60, h:0.40 },
+  ceilings:         { name:'Потолки',                  step:0.6, fast:4,  waste:8,  w:0.60, h:0.60 },
+  aquapanelDrywall: { name:'Аквапанель/Гипсокартон',    step:0.4, fast:20, waste:10, w:1.20, h:2.50 },
+  fibrocement:      { name:'Фиброцемент',               step:0.6, fast:10, waste:8,  w:0.60, h:1.2  },
+  metalProfile:     { name:'Металлопрофиль',            step:1.0, fast:6,  waste:6,  w:1.15, h:2.0  }
 };
+const DEFAULT_PRESET = 'ventilated';
 
 // --- Helpers
 const $ = (s,root=document)=>root.querySelector(s);
@@ -176,16 +204,65 @@ function escapeHtml(s){
   return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+// --- Units: the calculator always works internally in meters (state.panelW/H/step
+// and every wall/opening width/height are canonical meters). The chosen unit only
+// controls how numbers are displayed and typed on screen.
+const UNIT_CONFIG = {
+  m:  { label:'м',  factor: 1,    decimals: 2, inputmode: 'decimal' },
+  cm: { label:'см', factor: 100,  decimals: 1, inputmode: 'decimal' },
+  mm: { label:'мм', factor: 1000, decimals: 0, inputmode: 'numeric' }
+};
+function getUnitCfg(){ return UNIT_CONFIG[$('#unit').value] || UNIT_CONFIG.mm; }
+function formatForUnit(meters){
+  const cfg = getUnitCfg();
+  const scale = Math.pow(10, cfg.decimals);
+  return Math.round(meters * cfg.factor * scale) / scale;
+}
+function displayToMeters(v){
+  return parseNum(v) / getUnitCfg().factor;
+}
+
 // --- State
-const state = { facadeType:'siding', walls:[], openings:[] };
+const state = { facadeType: DEFAULT_PRESET, panelW:0, panelH:0, step:0, walls:[], openings:[] };
 
 function applyPreset(type){
   const p = presets[type];
-  $('#panelW').value = p.w; $('#panelH').value = p.h;
-  $('#step').value   = p.step;
+  state.panelW = p.w; state.panelH = p.h; state.step = p.step;
+  renderPanelFields();
   $('#fasteners').value = p.fast;
   $('#waste').value = p.waste;
+  updateSectionLabels();
+  updateUnitLabels();
   recalc();
+}
+
+function renderPanelFields(){
+  const cfg = getUnitCfg();
+  $('#panelW').value = formatForUnit(state.panelW);
+  $('#panelH').value = formatForUnit(state.panelH);
+  $('#step').value = formatForUnit(state.step);
+  [$('#panelW'), $('#panelH'), $('#step')].forEach(el=>{ el.inputMode = cfg.inputmode; });
+}
+
+function updateUnitLabels(){
+  const cfg = getUnitCfg();
+  $('#panelWLabel').textContent = `Ширина панели (${cfg.label})`;
+  $('#panelHLabel').textContent = `Высота панели (${cfg.label})`;
+  $('#stepLabel').textContent = `Шаг профилей (${cfg.label})`;
+  $('#wallsWidthHeader').textContent = `Ширина, ${cfg.label}`;
+  $('#wallsHeightHeader').textContent = `Высота, ${cfg.label}`;
+  $('#openingsWidthHeader').textContent = `Ширина, ${cfg.label}`;
+  $('#openingsHeightHeader').textContent = `Высота, ${cfg.label}`;
+  const exampleW = formatForUnit(10), exampleH = formatForUnit(3);
+  $('#wallsHint').textContent = `Пример: ${exampleW} × ${exampleH} ${cfg.label}, 2 шт. Для мгновенного пересчёта просто меняйте значения — результаты ниже обновляются сами.`;
+}
+
+function updateSectionLabels(){
+  const isCeiling = $('#facadeType').value === 'ceilings';
+  $('#wallsSectionTitle').textContent = isCeiling ? 'Шаг 2. Участки потолка' : 'Шаг 2. Стены';
+  $('#addWall').textContent = isCeiling ? '+ Добавить участок' : '+ Добавить стену';
+  $('#openingsSectionTitle').textContent = isCeiling ? 'Шаг 3. Вырезы (светильники, люки)' : 'Шаг 3. Проёмы';
+  $('#addOpening').textContent = isCeiling ? '+ Добавить вырез' : '+ Добавить проём';
 }
 
 // --- Draft autosave + undo/redo history
@@ -199,14 +276,16 @@ let historyTimer = null;
 function snapshotState(){
   return JSON.stringify({
     facadeType: $('#facadeType').value,
+    unit: $('#unit').value,
     projectName: $('#projectName').value,
     client: $('#client').value,
-    panelW: $('#panelW').value,
-    panelH: $('#panelH').value,
-    step: $('#step').value,
+    panelW: state.panelW,
+    panelH: state.panelH,
+    step: state.step,
     fasteners: $('#fasteners').value,
     waste: $('#waste').value,
     corners: $('#corners').value,
+    orientation: $('#orientation').value,
     pricePanel: $('#pricePanel').value,
     priceProfile: $('#priceProfile').value,
     priceFast: $('#priceFast').value,
@@ -218,20 +297,25 @@ function snapshotState(){
 function applySnapshot(json){
   const s = JSON.parse(json);
   $('#facadeType').value = s.facadeType;
+  $('#unit').value = s.unit || 'mm';
   $('#projectName').value = s.projectName;
   $('#client').value = s.client;
-  $('#panelW').value = s.panelW;
-  $('#panelH').value = s.panelH;
-  $('#step').value = s.step;
+  state.panelW = s.panelW;
+  state.panelH = s.panelH;
+  state.step = s.step;
   $('#fasteners').value = s.fasteners;
   $('#waste').value = s.waste;
   $('#corners').value = s.corners;
+  $('#orientation').value = s.orientation || 'vertical';
   $('#pricePanel').value = s.pricePanel;
   $('#priceProfile').value = s.priceProfile;
   $('#priceFast').value = s.priceFast;
   state.walls = s.walls;
   state.openings = s.openings;
+  renderPanelFields();
   renderTables();
+  updateSectionLabels();
+  updateUnitLabels();
   recalc();
 }
 
@@ -289,9 +373,11 @@ function clearAll(){
   clearTimeout(historyTimer);
   $('#projectName').value = '';
   $('#client').value = '';
-  $('#facadeType').value = 'siding';
-  applyPreset('siding');
+  $('#unit').value = 'mm';
+  $('#facadeType').value = DEFAULT_PRESET;
+  applyPreset(DEFAULT_PRESET);
   $('#corners').value = 4;
+  $('#orientation').value = 'vertical';
   $('#pricePanel').value = '';
   $('#priceProfile').value = '';
   $('#priceFast').value = '';
@@ -308,10 +394,11 @@ function clearAll(){
 }
 
 function rowInputs(w,h,c,onDel){
+  const cfg = getUnitCfg();
   const tr = document.createElement('tr');
   tr.innerHTML = `
-    <td><input type="text" inputmode="decimal" value="${w}"></td>
-    <td><input type="text" inputmode="decimal" value="${h}"></td>
+    <td><input type="text" inputmode="${cfg.inputmode}" value="${formatForUnit(w)}"></td>
+    <td><input type="text" inputmode="${cfg.inputmode}" value="${formatForUnit(h)}"></td>
     <td><input type="number" step="1" min="1" value="${c}"></td>
     <td><button class="btn ghost">✕</button></td>`;
   tr.lastElementChild.firstElementChild.addEventListener('click', e=>{ e.preventDefault(); onDel(tr); recalc(); commitHistoryImmediate(); });
@@ -323,8 +410,8 @@ function renderTables(){
   state.walls.forEach((w,idx)=>{
     const tr = rowInputs(w.width,w.height,w.count,(tr)=>{ state.walls.splice(idx,1); renderTables(); });
     const inputs = tr.querySelectorAll('input');
-    on(inputs[0],'input', e=>{ state.walls[idx].width = parseNum(e.target.value); recalc(); scheduleHistoryCommit(); });
-    on(inputs[1],'input', e=>{ state.walls[idx].height = parseNum(e.target.value); recalc(); scheduleHistoryCommit(); });
+    on(inputs[0],'input', e=>{ state.walls[idx].width = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
+    on(inputs[1],'input', e=>{ state.walls[idx].height = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
     on(inputs[2],'input', e=>{ state.walls[idx].count  = Math.max(1, Math.floor(parseNum(e.target.value)||1)); recalc(); scheduleHistoryCommit(); });
     wBody.appendChild(tr);
   });
@@ -332,8 +419,8 @@ function renderTables(){
   state.openings.forEach((o,idx)=>{
     const tr = rowInputs(o.width,o.height,o.count,(tr)=>{ state.openings.splice(idx,1); renderTables(); });
     const inputs = tr.querySelectorAll('input');
-    on(inputs[0],'input', e=>{ state.openings[idx].width = parseNum(e.target.value); recalc(); scheduleHistoryCommit(); });
-    on(inputs[1],'input', e=>{ state.openings[idx].height = parseNum(e.target.value); recalc(); scheduleHistoryCommit(); });
+    on(inputs[0],'input', e=>{ state.openings[idx].width = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
+    on(inputs[1],'input', e=>{ state.openings[idx].height = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
     on(inputs[2],'input', e=>{ state.openings[idx].count  = Math.max(1, Math.floor(parseNum(e.target.value)||1)); recalc(); scheduleHistoryCommit(); });
     oBody.appendChild(tr);
   });
@@ -345,12 +432,13 @@ function addOpening(){ state.openings.push({width:1.5, height:1.5, count:1}); re
 
 // Calculation
 function calculate(){
-  const panelW = parseNum($('#panelW').value);
-  const panelH = parseNum($('#panelH').value);
-  const step   = Math.max(0.1, parseNum($('#step').value));
+  const panelW = state.panelW;
+  const panelH = state.panelH;
+  const step   = Math.max(0.1, state.step);
   const fast   = Math.max(1, Math.floor(parseNum($('#fasteners').value)||1));
   const wasteP = Math.max(0, parseNum($('#waste').value));
   const corners = Math.max(0, parseNum($('#corners').value));
+  const orientation = $('#orientation').value;
   const pricePanel   = Math.max(0, parseNum($('#pricePanel').value));
   const priceProfile = Math.max(0, parseNum($('#priceProfile').value));
   const priceFast    = Math.max(0, parseNum($('#priceFast').value));
@@ -366,8 +454,14 @@ function calculate(){
   let profilesLenRaw = 0;
   let heightWeighted = 0, countTotal = 0;
   state.walls.forEach(w=>{
-    const posts = Math.floor(Math.max(0,w.width) / step) + 1;
-    const perWall = posts * Math.max(0,w.height);
+    let perWall;
+    if(orientation === 'horizontal'){
+      const rows = Math.floor(Math.max(0,w.height) / step) + 1;
+      perWall = rows * Math.max(0,w.width);
+    }else{
+      const posts = Math.floor(Math.max(0,w.width) / step) + 1;
+      perWall = posts * Math.max(0,w.height);
+    }
     const count = Math.max(1,w.count|0);
     profilesLenRaw += perWall * count;
     heightWeighted += Math.max(0,w.height) * count;
@@ -384,7 +478,7 @@ function calculate(){
   const costFasteners = fasteners * priceFast;
   const total = costPanels + costProfiles + costFasteners;
 
-  return {wallsArea, openingsArea, netArea, panels, profilesLen, fasteners, costPanels, costProfiles, costFasteners, total, step, fast, wasteP, corners};
+  return {wallsArea, openingsArea, netArea, panels, profilesLen, fasteners, costPanels, costProfiles, costFasteners, total, step, fast, wasteP, corners, orientation};
 }
 
 function renderResults(r){
@@ -406,7 +500,8 @@ function renderResults(r){
       <tr><th colspan="3" style="text-align:right">Итого</th><th>${r.total.toFixed(2)}</th></tr>
     </table>
     </div>`;
-  $('#note').textContent = `Тип: ${presets[$('#facadeType').value].name}. Шаг: ${r.step} м, крепёж/панель: ${r.fast}, отходы: ${r.wasteP}%, углов: ${r.corners}`;
+  const cfg = getUnitCfg();
+  $('#note').textContent = `Тип: ${presets[$('#facadeType').value].name}. Обрешётка: ${r.orientation==='horizontal'?'горизонтальная':'вертикальная'}. Шаг: ${formatForUnit(r.step)} ${cfg.label}, крепёж/панель: ${r.fast}, отходы: ${r.wasteP}%, углов: ${r.corners}`;
 }
 
 function markInvalid(el, bad){
@@ -415,9 +510,9 @@ function markInvalid(el, bad){
 
 function validateInputs(){
   const msgs = [];
-  const panelW = parseNum($('#panelW').value);
-  const panelH = parseNum($('#panelH').value);
-  const stepV  = parseNum($('#step').value);
+  const panelW = state.panelW;
+  const panelH = state.panelH;
+  const stepV  = state.step;
 
   markInvalid($('#panelW'), panelW<=0);
   if(panelW<=0) msgs.push('Ширина панели должна быть больше 0.');
@@ -479,12 +574,14 @@ function projectFromUI(){
     walls: state.walls,
     openings: state.openings,
     params: {
-      panelW: parseNum($('#panelW').value),
-      panelH: parseNum($('#panelH').value),
-      step:   parseNum($('#step').value),
+      panelW: state.panelW,
+      panelH: state.panelH,
+      step:   state.step,
       fasteners: Math.max(1, Math.floor(parseNum($('#fasteners').value)||1)),
       waste:  Math.max(0, parseNum($('#waste').value)),
       corners: Math.max(0, parseNum($('#corners').value)),
+      orientation: $('#orientation').value,
+      unit: $('#unit').value,
       pricePanel:   Math.max(0, parseNum($('#pricePanel').value)),
       priceProfile: Math.max(0, parseNum($('#priceProfile').value)),
       priceFast:    Math.max(0, parseNum($('#priceFast').value)),
@@ -533,20 +630,24 @@ function loadProjectIdx(i){
   const p = list[i]; if(!p) return;
   $('#projectName').value = p.name || '';
   $('#client').value = p.client || '';
-  $('#facadeType').value = p.facadeType || 'siding';
+  $('#unit').value = p.params.unit || 'mm';
+  $('#facadeType').value = presets[p.facadeType] ? p.facadeType : DEFAULT_PRESET;
   applyPreset($('#facadeType').value);
-  $('#panelW').value = p.params.panelW;
-  $('#panelH').value = p.params.panelH;
-  $('#step').value   = p.params.step;
+  state.panelW = p.params.panelW;
+  state.panelH = p.params.panelH;
+  state.step   = p.params.step;
+  renderPanelFields();
   $('#fasteners').value = p.params.fasteners;
   $('#waste').value  = p.params.waste;
   $('#corners').value = p.params.corners != null ? p.params.corners : 4;
+  $('#orientation').value = p.params.orientation || 'vertical';
   $('#pricePanel').value   = p.params.pricePanel;
   $('#priceProfile').value = p.params.priceProfile;
   $('#priceFast').value    = p.params.priceFast;
   state.walls = p.walls || [];
   state.openings = p.openings || [];
   renderTables();
+  updateUnitLabels();
   recalc();
   historyStack = [];
   redoStack = [];
@@ -561,6 +662,8 @@ function exportCSV(){
   const rows = [
     ['Объект', p.name],
     ['Клиент', p.client],
+    ['Тип фасада', presets[p.facadeType] ? presets[p.facadeType].name : p.facadeType],
+    ['Обрешётка', p.params.orientation === 'horizontal' ? 'Горизонтальная' : 'Вертикальная'],
     ['Дата', new Date(p.date).toLocaleString()],
     [],
     ['Позиция','Кол-во','Цена/ед.','Сумма'],
@@ -581,16 +684,18 @@ function renderPrintReport(r){
   const name = escapeHtml($('#projectName').value.trim() || 'Без названия');
   const client = escapeHtml($('#client').value.trim() || '—');
   const typeName = presets[$('#facadeType').value].name;
+  const isCeiling = $('#facadeType').value === 'ceilings';
+  const orientationName = r.orientation === 'horizontal' ? 'горизонтальная' : 'вертикальная';
 
   let html = `<h1>Смета: ${name}</h1>
-    <p>Клиент: ${client} · Тип фасада: ${typeName} · Дата: ${new Date().toLocaleDateString('ru-RU')}</p>
-    <h2>Стены</h2>
+    <p>Клиент: ${client} · Тип фасада: ${typeName} · Обрешётка: ${orientationName} · Дата: ${new Date().toLocaleDateString('ru-RU')}</p>
+    <h2>${isCeiling ? 'Участки потолка' : 'Стены'}</h2>
     <table><thead><tr><th>Ширина, м</th><th>Высота, м</th><th>Кол-во</th><th>Площадь, м²</th></tr></thead><tbody>`;
   state.walls.forEach(w=>{
     html += `<tr><td>${w.width}</td><td>${w.height}</td><td>${w.count}</td><td>${(w.width*w.height*w.count).toFixed(2)}</td></tr>`;
   });
   html += `</tbody></table>
-    <h2>Проёмы</h2>
+    <h2>${isCeiling ? 'Вырезы (светильники, люки)' : 'Проёмы'}</h2>
     <table><thead><tr><th>Ширина, м</th><th>Высота, м</th><th>Кол-во</th><th>Площадь, м²</th></tr></thead><tbody>`;
   state.openings.forEach(o=>{
     html += `<tr><td>${o.width}</td><td>${o.height}</td><td>${o.count}</td><td>${(o.width*o.height*o.count).toFixed(2)}</td></tr>`;
@@ -612,9 +717,14 @@ function printPDF(){
 }
 
 // Bind base inputs for auto-recalc
-['panelW','panelH','step','fasteners','waste','corners','pricePanel','priceProfile','priceFast','projectName','client'].forEach(id=>{
+['fasteners','waste','corners','pricePanel','priceProfile','priceFast','projectName','client'].forEach(id=>{
   on(document.getElementById(id),'input', e=>{ recalc(); scheduleHistoryCommit(); });
 });
+on($('#panelW'),'input', e=>{ state.panelW = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
+on($('#panelH'),'input', e=>{ state.panelH = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
+on($('#step'),'input', e=>{ state.step = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
+on($('#unit'),'change', e=>{ renderPanelFields(); renderTables(); updateUnitLabels(); recalc(); commitHistoryImmediate(); });
+on($('#orientation'),'change', e=>{ recalc(); commitHistoryImmediate(); });
 on($('#facadeType'),'change', e=>{ state.facadeType = e.target.value; applyPreset(state.facadeType); commitHistoryImmediate(); });
 
 // Buttons
@@ -643,14 +753,14 @@ if(draftRaw){
     applySnapshot(draftRaw);
     $('#draftNote').textContent = 'Восстановлен черновик последней незавершённой работы (сохраняется автоматически).';
   }catch(e){
-    applyPreset('siding');
+    applyPreset(DEFAULT_PRESET);
     state.walls = [];
     state.openings = [];
     renderTables();
     recalc();
   }
 }else{
-  applyPreset('siding');
+  applyPreset(DEFAULT_PRESET);
   state.walls = [];
   state.openings = [];
   renderTables();
