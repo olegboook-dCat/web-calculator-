@@ -32,12 +32,9 @@
     .muted{color:var(--muted);font-size:12px}
     .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
     .pill{padding:4px 10px;border-radius:999px;border:1px solid #334155;background:#0b1221;display:inline-block;margin:0 6px 6px 0}
-    .right{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
     .hr{height:1px;background:#1f2937;margin:10px 0}
-    .topbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
     .small{font-size:12px}
     .table-scroll{width:100%;overflow-x:auto}
-    .draft-row{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin:-4px 0 10px}
     @media (max-width:800px){.row{grid-template-columns:1fr}.grid-3,.grid-2{grid-template-columns:1fr}}
     @media (max-width:480px){
       .wrap{padding:10px}
@@ -46,7 +43,7 @@
       th,td{padding:5px;font-size:13px}
       .btn{padding:8px 10px;font-size:13px}
     }
-    @media print {.btn,.actions,.topbar{display:none}.card{border:1px solid #999;background:white;color:black}}
+    @media print {.btn,.actions{display:none}.card{border:1px solid #999;background:white;color:black}}
     #printReport{display:none}
     #printReport table{width:100%;border-collapse:collapse;margin:10px 0}
     #printReport th,#printReport td{border:1px solid #333;padding:6px;text-align:left;font-size:13px}
@@ -60,22 +57,26 @@
 </head>
 <body>
   <div class="wrap">
-    <div class="topbar">
-      <h1>Калькулятор фасадных материалов — Портативная v2</h1>
-      <div class="right">
+    <div class="card">
+      <h1 style="margin:0 0 4px 0;font-size:22px">Калькулятор фасадных материалов</h1>
+      <span class="muted small" id="draftNote"></span>
+
+      <div class="actions" style="margin-top:12px;align-items:flex-end">
+        <div style="flex:1;min-width:180px">
+          <label>Название проекта</label>
+          <input id="projectName" placeholder="Напр. Коттедж на Набережной">
+        </div>
+        <button class="btn ok" id="btnSave">Сохранить</button>
+      </div>
+
+      <div class="actions" style="margin-top:10px">
         <button class="btn" id="btnUndo" title="Отменить (Ctrl+Z)">↶ Отменить</button>
         <button class="btn" id="btnRedo" title="Повторить (Ctrl+Shift+Z)">↷ Повторить</button>
-        <button class="btn ok" id="btnSave">Сохранить</button>
+      </div>
+      <div class="actions" style="margin-top:6px">
         <button class="btn" id="btnCSV">Экспорт CSV</button>
         <button class="btn" id="btnPDF">Печать / PDF</button>
       </div>
-    </div>
-    <div class="draft-row">
-      <span class="muted small" id="draftNote"></span>
-      <div style="flex:1;min-width:180px">
-        <input id="projectName" placeholder="Название проекта (для сохранения)">
-      </div>
-      <button class="btn ghost small" id="btnClear" style="padding:4px 10px">Очистить всё</button>
     </div>
 
     <div class="card">
@@ -215,6 +216,8 @@
       <div style="margin-top:12px">
       <div class="muted">Сохраняются локально на этом устройстве (localStorage).</div>
       <div id="list"></div>
+      <div class="hr"></div>
+      <button class="btn ghost small" id="btnClear" style="padding:4px 10px">Очистить всё</button>
       </div>
       </details>
     </div>
