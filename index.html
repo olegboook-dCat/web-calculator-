@@ -112,6 +112,11 @@
         <div><label id="stepLabel">Шаг профилей</label><input type="text" id="step" inputmode="decimal"></div>
       </div>
       <div class="grid-3" style="margin-top:10px">
+        <div><label>Кронштейны, шт/м²</label><input type="text" id="bracketsPerM2" inputmode="decimal" value="3"></div>
+        <div><label id="insulationLabel">Толщина утеплителя</label><input type="text" id="insulationThickness" inputmode="decimal"></div>
+        <div><label id="bracketLenLabel">Станд. длина кронштейна</label><input type="text" id="bracketStandardLength" inputmode="decimal"></div>
+      </div>
+      <div class="grid-3" style="margin-top:10px">
         <div><label>Крепёж на панель (шт)</label><input type="number" id="fasteners" step="1" min="1"></div>
         <div><label>Обрезки (%)</label><input type="text" id="waste" inputmode="decimal"></div>
         <div><label>Наружных углов (шт)</label><input type="number" id="corners" step="1" min="0" value="4"></div>
@@ -120,12 +125,7 @@
         <div><label>Процент на бой/брак (%)</label><input type="text" id="damagePercent" inputmode="decimal" value="5"></div>
       </div>
       <div class="grid-3" style="margin-top:10px">
-        <div><label>Кронштейны, шт/м²</label><input type="text" id="bracketsPerM2" inputmode="decimal" value="3"></div>
-        <div><label id="insulationLabel">Толщина утеплителя</label><input type="text" id="insulationThickness" inputmode="decimal"></div>
-        <div><label id="bracketLenLabel">Станд. длина кронштейна</label><input type="text" id="bracketStandardLength" inputmode="decimal"></div>
-      </div>
-      <div class="grid-3" style="margin-top:10px">
-        <div><label>Коэффициент горизонтальной подсистемы</label><input type="text" id="hSubsystemCoeff" inputmode="decimal" value="1"></div>
+        <div><label>Горизонтальная подсистема мм</label><input type="text" id="hSubsystemCoeff" inputmode="decimal" value="1"></div>
       </div>
       <details class="hint" style="margin-top:8px">
         <summary class="muted small" style="cursor:pointer">ⓘ Подсказка</summary>
