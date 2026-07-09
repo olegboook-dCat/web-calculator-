@@ -125,7 +125,8 @@
         <div><label>Процент на бой/брак (%)</label><input type="text" id="damagePercent" inputmode="decimal" value="5"></div>
       </div>
       <div class="grid-3" style="margin-top:10px">
-        <div><label>Горизонтальная подсистема мм</label><input type="text" id="hSubsystemCoeff" inputmode="decimal" value="1"></div>
+        <div><label>Горизонтальная подсистема, количество</label><input type="text" id="hSubsystemQty" inputmode="decimal" value="1"></div>
+        <div><label id="hSubsystemLengthLabel">Горизонтальная подсистема, длина</label><input type="text" id="hSubsystemLength" inputmode="decimal"></div>
       </div>
       <details class="hint" style="margin-top:8px">
         <summary class="muted small" style="cursor:pointer">ⓘ Подсказка</summary>
@@ -308,7 +309,7 @@ function displayToMeters(v){
 }
 
 // --- State
-const state = { facadeType: DEFAULT_PRESET, panelW:0, panelH:0, step:0, insulationThickness:0.1, bracketStandardLength:0.12, walls:[], openings:[], consumables:[] };
+const state = { facadeType: DEFAULT_PRESET, panelW:0, panelH:0, step:0, insulationThickness:0.1, bracketStandardLength:0.12, hSubsystemLength:1, walls:[], openings:[], consumables:[] };
 
 function applyPreset(type){
   const p = presets[type];
@@ -328,7 +329,8 @@ function renderPanelFields(){
   $('#step').value = formatForUnit(state.step);
   $('#insulationThickness').value = formatForUnit(state.insulationThickness);
   $('#bracketStandardLength').value = formatForUnit(state.bracketStandardLength);
-  [$('#panelW'), $('#panelH'), $('#step'), $('#insulationThickness'), $('#bracketStandardLength')].forEach(el=>{ el.inputMode = cfg.inputmode; });
+  $('#hSubsystemLength').value = formatForUnit(state.hSubsystemLength);
+  [$('#panelW'), $('#panelH'), $('#step'), $('#insulationThickness'), $('#bracketStandardLength'), $('#hSubsystemLength')].forEach(el=>{ el.inputMode = cfg.inputmode; });
 }
 
 function updateUnitLabels(){
@@ -338,6 +340,7 @@ function updateUnitLabels(){
   $('#stepLabel').textContent = `Шаг профилей (${cfg.label})`;
   $('#insulationLabel').textContent = `Толщина утеплителя (${cfg.label})`;
   $('#bracketLenLabel').textContent = `Станд. длина кронштейна (${cfg.label})`;
+  $('#hSubsystemLengthLabel').textContent = `Горизонтальная подсистема, длина (${cfg.label})`;
   $('#wallsWidthHeader').textContent = `Ширина, ${cfg.label}`;
   $('#wallsHeightHeader').textContent = `Высота, ${cfg.label}`;
   $('#openingsWidthHeader').textContent = `Ширина, ${cfg.label}`;
@@ -377,7 +380,8 @@ function snapshotState(){
     bracketsPerM2: $('#bracketsPerM2').value,
     insulationThickness: state.insulationThickness,
     bracketStandardLength: state.bracketStandardLength,
-    hSubsystemCoeff: $('#hSubsystemCoeff').value,
+    hSubsystemQty: $('#hSubsystemQty').value,
+    hSubsystemLength: state.hSubsystemLength,
     pricePanel: $('#pricePanel').value,
     priceProfile: $('#priceProfile').value,
     priceFast: $('#priceFast').value,
@@ -406,7 +410,8 @@ function applySnapshot(json){
   $('#bracketsPerM2').value = s.bracketsPerM2 != null ? s.bracketsPerM2 : 3;
   state.insulationThickness = s.insulationThickness != null ? s.insulationThickness : 0.1;
   state.bracketStandardLength = s.bracketStandardLength != null ? s.bracketStandardLength : 0.12;
-  $('#hSubsystemCoeff').value = s.hSubsystemCoeff != null ? s.hSubsystemCoeff : 1;
+  $('#hSubsystemQty').value = s.hSubsystemQty != null ? s.hSubsystemQty : 1;
+  state.hSubsystemLength = s.hSubsystemLength != null ? s.hSubsystemLength : 1;
   $('#pricePanel').value = s.pricePanel;
   $('#priceProfile').value = s.priceProfile;
   $('#priceFast').value = s.priceFast;
@@ -486,7 +491,8 @@ function clearAll(){
   $('#bracketsPerM2').value = 3;
   state.insulationThickness = 0.1;
   state.bracketStandardLength = 0.12;
-  $('#hSubsystemCoeff').value = 1;
+  $('#hSubsystemQty').value = 1;
+  state.hSubsystemLength = 1;
   renderPanelFields();
   $('#pricePanel').value = '';
   $('#priceProfile').value = '';
@@ -605,7 +611,8 @@ function calculate(){
   const bracketsPerM2 = Math.max(0, parseNum($('#bracketsPerM2').value));
   const insulationThickness = state.insulationThickness;
   const bracketStandardLength = state.bracketStandardLength;
-  const hSubsystemCoeff = Math.max(0, parseNum($('#hSubsystemCoeff').value));
+  const hSubsystemQty = Math.max(0, parseNum($('#hSubsystemQty').value));
+  const hSubsystemLength = state.hSubsystemLength;
   const pricePanel   = Math.max(0, parseNum($('#pricePanel').value));
   const priceProfile = Math.max(0, parseNum($('#priceProfile').value));
   const priceFast    = Math.max(0, parseNum($('#priceFast').value));
@@ -624,7 +631,7 @@ function calculate(){
   const panels = ceil((netArea / panelArea) * wasteCoeff * damageCoeff);
 
   let profilesLenRaw = 0;
-  let heightWeighted = 0, countTotal = 0, widthSum = 0;
+  let heightWeighted = 0, countTotal = 0;
   state.walls.forEach(w=>{
     const posts = Math.floor(Math.max(0,w.width) / step) + 1;
     const perWall = posts * Math.max(0,w.height);
@@ -632,7 +639,6 @@ function calculate(){
     profilesLenRaw += perWall * count;
     heightWeighted += Math.max(0,w.height) * count;
     countTotal += count;
-    widthSum += Math.max(0,w.width) * count;
   });
   const avgHeight = countTotal > 0 ? heightWeighted / countTotal : 0;
   const cornerProfileLen = corners * avgHeight;
@@ -643,7 +649,7 @@ function calculate(){
   const brackets = ceil(netArea * bracketsPerM2);
   const extenders = (insulationThickness > bracketStandardLength) ? brackets : 0;
   const insulationArea = netArea * wasteCoeff;
-  const hSubsystemLen = widthSum * hSubsystemCoeff;
+  const hSubsystemLen = hSubsystemQty * hSubsystemLength;
 
   const costPanels    = panels * pricePanel;
   const costProfiles  = profilesLen * priceProfile;
@@ -771,7 +777,8 @@ function projectFromUI(){
       bracketsPerM2: Math.max(0, parseNum($('#bracketsPerM2').value)),
       insulationThickness: state.insulationThickness,
       bracketStandardLength: state.bracketStandardLength,
-      hSubsystemCoeff: Math.max(0, parseNum($('#hSubsystemCoeff').value)),
+      hSubsystemQty: Math.max(0, parseNum($('#hSubsystemQty').value)),
+      hSubsystemLength: state.hSubsystemLength,
       pricePanel:   Math.max(0, parseNum($('#pricePanel').value)),
       priceProfile: Math.max(0, parseNum($('#priceProfile').value)),
       priceFast:    Math.max(0, parseNum($('#priceFast').value)),
@@ -836,7 +843,8 @@ function loadProjectIdx(i){
   $('#bracketsPerM2').value = p.params.bracketsPerM2 != null ? p.params.bracketsPerM2 : 3;
   state.insulationThickness = p.params.insulationThickness != null ? p.params.insulationThickness : 0.1;
   state.bracketStandardLength = p.params.bracketStandardLength != null ? p.params.bracketStandardLength : 0.12;
-  $('#hSubsystemCoeff').value = p.params.hSubsystemCoeff != null ? p.params.hSubsystemCoeff : 1;
+  $('#hSubsystemQty').value = p.params.hSubsystemQty != null ? p.params.hSubsystemQty : 1;
+  state.hSubsystemLength = p.params.hSubsystemLength != null ? p.params.hSubsystemLength : 1;
   renderPanelFields();
   $('#pricePanel').value   = p.params.pricePanel;
   $('#priceProfile').value = p.params.priceProfile;
@@ -931,7 +939,7 @@ function printPDF(){
 }
 
 // Bind base inputs for auto-recalc
-['fasteners','waste','damagePercent','corners','bracketsPerM2','hSubsystemCoeff','pricePanel','priceProfile','priceFast','priceBracket','priceExtender','priceInsulation','priceHSubsystem','projectName'].forEach(id=>{
+['fasteners','waste','damagePercent','corners','bracketsPerM2','hSubsystemQty','pricePanel','priceProfile','priceFast','priceBracket','priceExtender','priceInsulation','priceHSubsystem','projectName'].forEach(id=>{
   on(document.getElementById(id),'input', e=>{ recalc(); scheduleHistoryCommit(); });
 });
 on($('#panelW'),'input', e=>{ state.panelW = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
@@ -939,6 +947,7 @@ on($('#panelH'),'input', e=>{ state.panelH = displayToMeters(e.target.value); re
 on($('#step'),'input', e=>{ state.step = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
 on($('#insulationThickness'),'input', e=>{ state.insulationThickness = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
 on($('#bracketStandardLength'),'input', e=>{ state.bracketStandardLength = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
+on($('#hSubsystemLength'),'input', e=>{ state.hSubsystemLength = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
 on($('#unit'),'change', e=>{ renderPanelFields(); renderTables(); updateUnitLabels(); recalc(); commitHistoryImmediate(); });
 on($('#facadeType'),'change', e=>{ state.facadeType = e.target.value; applyPreset(state.facadeType); commitHistoryImmediate(); });
 
