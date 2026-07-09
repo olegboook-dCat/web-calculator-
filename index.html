@@ -127,7 +127,10 @@
       <div class="grid-3" style="margin-top:10px">
         <div><label>Коэффициент горизонтальной подсистемы</label><input type="text" id="hSubsystemCoeff" inputmode="decimal" value="1"></div>
       </div>
-      <div class="muted" style="margin-top:6px">Совет: можно вводить числа и с запятой, и с точкой. Обрезки (%) применяются и к панелям, и к профилю (с учётом углов дома). Процент на бой/брак применяется только к панелям. Единицу измерения можно менять в любой момент — уже введённые размеры пересчитаются автоматически. Наращиватели кронштейнов добавятся в смету сами, если толщина утеплителя больше стандартной длины кронштейна. Горизонтальная подсистема считается как суммарная длина стен × коэффициент.</div>
+      <details class="hint" style="margin-top:8px">
+        <summary class="muted small" style="cursor:pointer">ⓘ Подсказка</summary>
+        <div class="muted" style="margin-top:6px">Совет: можно вводить числа и с запятой, и с точкой. Обрезки (%) применяются и к панелям, и к профилю (с учётом углов дома). Процент на бой/брак применяется только к панелям. Единицу измерения можно менять в любой момент — уже введённые размеры пересчитаются автоматически. Наращиватели кронштейнов добавятся в смету сами, если толщина утеплителя больше стандартной длины кронштейна. Горизонтальная подсистема считается как суммарная длина стен × коэффициент.</div>
+      </details>
       </div>
       </details>
     </div>
@@ -143,7 +146,10 @@
         <tbody></tbody>
       </table>
       </div>
-      <div class="muted" id="wallsHint">Для мгновенного пересчёта просто меняйте значения — результаты ниже обновляются сами.</div>
+      <details class="hint" style="margin-top:8px">
+        <summary class="muted small" style="cursor:pointer">ⓘ Подсказка</summary>
+        <div class="muted" id="wallsHint" style="margin-top:6px">Для мгновенного пересчёта просто меняйте значения — результаты ниже обновляются сами.</div>
+      </details>
       </div>
       </details>
     </div>
@@ -159,7 +165,10 @@
         <tbody></tbody>
       </table>
       </div>
-      <div class="muted">Окна/двери — их площадь вычитается. Мгновенный пересчёт включён.</div>
+      <details class="hint" style="margin-top:8px">
+        <summary class="muted small" style="cursor:pointer">ⓘ Подсказка</summary>
+        <div class="muted" style="margin-top:6px">Окна/двери — их площадь вычитается. Мгновенный пересчёт включён.</div>
+      </details>
       </div>
       </details>
     </div>
@@ -196,7 +205,10 @@
         <tbody></tbody>
       </table>
       </div>
-      <div class="muted">Например: герметик, монтажная пена, малярный скотч. Сумма по каждой строке считается сама и добавляется в общий итог сметы.</div>
+      <details class="hint" style="margin-top:8px">
+        <summary class="muted small" style="cursor:pointer">ⓘ Подсказка</summary>
+        <div class="muted" style="margin-top:6px">Например: герметик, монтажная пена, малярный скотч. Сумма по каждой строке считается сама и добавляется в общий итог сметы.</div>
+      </details>
       </div>
       </details>
     </div>
@@ -214,7 +226,10 @@
       <details>
       <summary style="cursor:pointer;font-size:18px;font-weight:600;color:#cbd5e1">Сохранённые проекты</summary>
       <div style="margin-top:12px">
-      <div class="muted">Сохраняются локально на этом устройстве (localStorage).</div>
+      <details class="hint" style="margin-top:0">
+        <summary class="muted small" style="cursor:pointer">ⓘ Подсказка</summary>
+        <div class="muted" style="margin-top:6px">Сохраняются локально на этом устройстве (localStorage).</div>
+      </details>
       <div id="list"></div>
       <div class="hr"></div>
       <button class="btn ghost small" id="btnClear" style="padding:4px 10px">Очистить всё</button>
@@ -226,7 +241,10 @@
       <details id="tapeDetails">
         <summary style="cursor:pointer;font-size:18px;font-weight:600;color:#cbd5e1">📏 Калькулятор-линейка (для замеров)</summary>
         <div style="margin-top:12px">
-          <div class="muted">Отдельный инструмент для замеров — не связан с расчётом фасада выше. Вводите число и нажимайте «+ Добавить» (или Enter) — оно попадёт в пронумерованный список, а сумма обновится сама. Любое значение в списке можно поправить или удалить.</div>
+          <details class="hint" style="margin-top:0">
+            <summary class="muted small" style="cursor:pointer">ⓘ Подсказка</summary>
+            <div class="muted" style="margin-top:6px">Отдельный инструмент для замеров — не связан с расчётом фасада выше. Вводите число и нажимайте «+ Добавить» (или Enter) — оно попадёт в пронумерованный список, а сумма обновится сама. Любое значение в списке можно поправить или удалить.</div>
+          </details>
           <div class="actions" style="margin-top:8px">
             <input type="text" id="tapeInput" inputmode="decimal" placeholder="Введите число" style="max-width:200px">
             <button class="btn primary" id="tapeAdd">+ Добавить</button>
