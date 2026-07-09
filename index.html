@@ -124,9 +124,12 @@
       <div class="grid-3" style="margin-top:10px">
         <div><label>Процент на бой/брак (%)</label><input type="text" id="damagePercent" inputmode="decimal" value="5"></div>
       </div>
-      <div class="grid-3" style="margin-top:10px">
-        <div><label>Горизонтальная подсистема, количество</label><input type="text" id="hSubsystemQty" inputmode="decimal" value="1"></div>
-        <div><label id="hSubsystemLengthLabel">Горизонтальная подсистема, длина</label><input type="text" id="hSubsystemLength" inputmode="decimal"></div>
+      <div style="margin-top:10px">
+        <label id="hSubsystemLengthLabel">Горизонтальная подсистема: количество × длина</label>
+        <div style="display:flex;gap:10px">
+          <input type="text" id="hSubsystemQty" inputmode="decimal" value="1" placeholder="Кол-во" style="flex:1;min-width:0">
+          <input type="text" id="hSubsystemLength" inputmode="decimal" placeholder="Длина" style="flex:1;min-width:0">
+        </div>
       </div>
       <details class="hint" style="margin-top:8px">
         <summary class="muted small" style="cursor:pointer">ⓘ Подсказка</summary>
@@ -340,7 +343,7 @@ function updateUnitLabels(){
   $('#stepLabel').textContent = `Шаг профилей (${cfg.label})`;
   $('#insulationLabel').textContent = `Толщина утеплителя (${cfg.label})`;
   $('#bracketLenLabel').textContent = `Станд. длина кронштейна (${cfg.label})`;
-  $('#hSubsystemLengthLabel').textContent = `Горизонтальная подсистема, длина (${cfg.label})`;
+  $('#hSubsystemLengthLabel').textContent = `Горизонтальная подсистема: количество × длина (${cfg.label})`;
   $('#wallsWidthHeader').textContent = `Ширина, ${cfg.label}`;
   $('#wallsHeightHeader').textContent = `Высота, ${cfg.label}`;
   $('#openingsWidthHeader').textContent = `Ширина, ${cfg.label}`;
