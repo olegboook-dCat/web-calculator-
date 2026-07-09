@@ -79,7 +79,9 @@
     </div>
 
     <div class="card">
-      <h2>Шаг 1. Объект и пресет</h2>
+      <details open>
+      <summary style="cursor:pointer;font-size:18px;font-weight:600;color:#cbd5e1">Шаг 1. Объект и пресет</summary>
+      <div style="margin-top:12px">
       <div class="grid-2">
         <div>
           <label>Тип фасада (пресет)</label>
@@ -125,10 +127,14 @@
         <div><label>Коэффициент горизонтальной подсистемы</label><input type="text" id="hSubsystemCoeff" inputmode="decimal" value="1"></div>
       </div>
       <div class="muted" style="margin-top:6px">Совет: можно вводить числа и с запятой, и с точкой. Обрезки (%) применяются и к панелям, и к профилю (с учётом углов дома). Процент на бой/брак применяется только к панелям. Единицу измерения можно менять в любой момент — уже введённые размеры пересчитаются автоматически. Наращиватели кронштейнов добавятся в смету сами, если толщина утеплителя больше стандартной длины кронштейна. Горизонтальная подсистема считается как суммарная длина стен × коэффициент.</div>
+      </div>
+      </details>
     </div>
 
     <div class="card">
-      <h2 id="wallsSectionTitle">Шаг 2. Стены</h2>
+      <details open>
+      <summary id="wallsSectionTitle" style="cursor:pointer;font-size:18px;font-weight:600;color:#cbd5e1">Шаг 2. Стены</summary>
+      <div style="margin-top:12px">
       <div class="actions"><button class="btn" id="addWall">+ Добавить стену</button></div>
       <div class="table-scroll">
       <table id="wallsTbl">
@@ -137,10 +143,14 @@
       </table>
       </div>
       <div class="muted" id="wallsHint">Для мгновенного пересчёта просто меняйте значения — результаты ниже обновляются сами.</div>
+      </div>
+      </details>
     </div>
 
     <div class="card">
-      <h2 id="openingsSectionTitle">Шаг 3. Проёмы</h2>
+      <details open>
+      <summary id="openingsSectionTitle" style="cursor:pointer;font-size:18px;font-weight:600;color:#cbd5e1">Шаг 3. Проёмы</summary>
+      <div style="margin-top:12px">
       <div class="actions"><button class="btn" id="addOpening">+ Добавить проём</button></div>
       <div class="table-scroll">
       <table id="openingsTbl">
@@ -149,10 +159,14 @@
       </table>
       </div>
       <div class="muted">Окна/двери — их площадь вычитается. Мгновенный пересчёт включён.</div>
+      </div>
+      </details>
     </div>
 
     <div class="card">
-      <h2>Шаг 4. Цены</h2>
+      <details open>
+      <summary style="cursor:pointer;font-size:18px;font-weight:600;color:#cbd5e1">Шаг 4. Цены</summary>
+      <div style="margin-top:12px">
       <div class="grid-3">
         <div><label>Цена за панель</label><input type="text" id="pricePanel" inputmode="decimal" placeholder="₽"></div>
         <div><label>Цена профиля за метр</label><input type="text" id="priceProfile" inputmode="decimal" placeholder="₽/м"></div>
@@ -166,10 +180,14 @@
       <div class="grid-3" style="margin-top:10px">
         <div><label>Цена горизонтальной подсистемы (₽/м)</label><input type="text" id="priceHSubsystem" inputmode="decimal" placeholder="₽/м"></div>
       </div>
+      </div>
+      </details>
     </div>
 
     <div class="card">
-      <h2>Шаг 5. Расходные материалы</h2>
+      <details open>
+      <summary style="cursor:pointer;font-size:18px;font-weight:600;color:#cbd5e1">Шаг 5. Расходные материалы</summary>
+      <div style="margin-top:12px">
       <div class="actions"><button class="btn" id="addConsumable">+ Добавить материал</button></div>
       <div class="table-scroll">
       <table id="consumablesTbl">
@@ -178,6 +196,8 @@
       </table>
       </div>
       <div class="muted">Например: герметик, монтажная пена, малярный скотч. Сумма по каждой строке считается сама и добавляется в общий итог сметы.</div>
+      </div>
+      </details>
     </div>
 
     <div class="card" id="resultsCard" style="display:none">
@@ -190,9 +210,13 @@
     </div>
 
     <div class="card">
-      <h2>Сохранённые проекты</h2>
+      <details open>
+      <summary style="cursor:pointer;font-size:18px;font-weight:600;color:#cbd5e1">Сохранённые проекты</summary>
+      <div style="margin-top:12px">
       <div class="muted">Сохраняются локально на этом устройстве (localStorage).</div>
       <div id="list"></div>
+      </div>
+      </details>
     </div>
 
     <div class="card">
