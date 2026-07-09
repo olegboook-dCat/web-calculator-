@@ -117,20 +117,14 @@
         <div><label>Процент на бой/брак (%)</label><input type="text" id="damagePercent" inputmode="decimal" value="5"></div>
       </div>
       <div class="grid-3" style="margin-top:10px">
-        <div>
-          <label>Ориентация обрешётки/профиля</label>
-          <select id="orientation">
-            <option value="vertical">Вертикальная (стойки)</option>
-            <option value="horizontal">Горизонтальная (направляющие)</option>
-          </select>
-        </div>
-      </div>
-      <div class="grid-3" style="margin-top:10px">
         <div><label>Кронштейны, шт/м²</label><input type="text" id="bracketsPerM2" inputmode="decimal" value="3"></div>
         <div><label id="insulationLabel">Толщина утеплителя</label><input type="text" id="insulationThickness" inputmode="decimal"></div>
         <div><label id="bracketLenLabel">Станд. длина кронштейна</label><input type="text" id="bracketStandardLength" inputmode="decimal"></div>
       </div>
-      <div class="muted" style="margin-top:6px">Совет: можно вводить числа и с запятой, и с точкой. Обрезки (%) применяются и к панелям, и к профилю (с учётом углов дома). Процент на бой/брак применяется только к панелям. Единицу измерения можно менять в любой момент — уже введённые размеры пересчитаются автоматически. Наращиватели кронштейнов добавятся в смету сами, если толщина утеплителя больше стандартной длины кронштейна.</div>
+      <div class="grid-3" style="margin-top:10px">
+        <div><label>Коэффициент горизонтальной подсистемы</label><input type="text" id="hSubsystemCoeff" inputmode="decimal" value="1"></div>
+      </div>
+      <div class="muted" style="margin-top:6px">Совет: можно вводить числа и с запятой, и с точкой. Обрезки (%) применяются и к панелям, и к профилю (с учётом углов дома). Процент на бой/брак применяется только к панелям. Единицу измерения можно менять в любой момент — уже введённые размеры пересчитаются автоматически. Наращиватели кронштейнов добавятся в смету сами, если толщина утеплителя больше стандартной длины кронштейна. Горизонтальная подсистема считается как суммарная длина стен × коэффициент.</div>
     </div>
 
     <div class="card">
@@ -168,6 +162,9 @@
         <div><label>Цена кронштейна (шт)</label><input type="text" id="priceBracket" inputmode="decimal" placeholder="₽/шт"></div>
         <div><label>Цена наращивателя (шт)</label><input type="text" id="priceExtender" inputmode="decimal" placeholder="₽/шт"></div>
         <div><label>Цена утеплителя (₽/м²)</label><input type="text" id="priceInsulation" inputmode="decimal" placeholder="₽/м²"></div>
+      </div>
+      <div class="grid-3" style="margin-top:10px">
+        <div><label>Цена горизонтальной подсистемы (₽/м)</label><input type="text" id="priceHSubsystem" inputmode="decimal" placeholder="₽/м"></div>
       </div>
     </div>
 
@@ -332,16 +329,17 @@ function snapshotState(){
     waste: $('#waste').value,
     damagePercent: $('#damagePercent').value,
     corners: $('#corners').value,
-    orientation: $('#orientation').value,
     bracketsPerM2: $('#bracketsPerM2').value,
     insulationThickness: state.insulationThickness,
     bracketStandardLength: state.bracketStandardLength,
+    hSubsystemCoeff: $('#hSubsystemCoeff').value,
     pricePanel: $('#pricePanel').value,
     priceProfile: $('#priceProfile').value,
     priceFast: $('#priceFast').value,
     priceBracket: $('#priceBracket').value,
     priceExtender: $('#priceExtender').value,
     priceInsulation: $('#priceInsulation').value,
+    priceHSubsystem: $('#priceHSubsystem').value,
     walls: state.walls,
     openings: state.openings,
     consumables: state.consumables
@@ -360,16 +358,17 @@ function applySnapshot(json){
   $('#waste').value = s.waste;
   $('#damagePercent').value = s.damagePercent != null ? s.damagePercent : 5;
   $('#corners').value = s.corners;
-  $('#orientation').value = s.orientation || 'vertical';
   $('#bracketsPerM2').value = s.bracketsPerM2 != null ? s.bracketsPerM2 : 3;
   state.insulationThickness = s.insulationThickness != null ? s.insulationThickness : 0.1;
   state.bracketStandardLength = s.bracketStandardLength != null ? s.bracketStandardLength : 0.12;
+  $('#hSubsystemCoeff').value = s.hSubsystemCoeff != null ? s.hSubsystemCoeff : 1;
   $('#pricePanel').value = s.pricePanel;
   $('#priceProfile').value = s.priceProfile;
   $('#priceFast').value = s.priceFast;
   $('#priceBracket').value = s.priceBracket;
   $('#priceExtender').value = s.priceExtender;
   $('#priceInsulation').value = s.priceInsulation;
+  $('#priceHSubsystem').value = s.priceHSubsystem;
   state.walls = s.walls;
   state.openings = s.openings;
   state.consumables = s.consumables || [];
@@ -439,10 +438,10 @@ function clearAll(){
   applyPreset(DEFAULT_PRESET);
   $('#corners').value = 4;
   $('#damagePercent').value = 5;
-  $('#orientation').value = 'vertical';
   $('#bracketsPerM2').value = 3;
   state.insulationThickness = 0.1;
   state.bracketStandardLength = 0.12;
+  $('#hSubsystemCoeff').value = 1;
   renderPanelFields();
   $('#pricePanel').value = '';
   $('#priceProfile').value = '';
@@ -450,6 +449,7 @@ function clearAll(){
   $('#priceBracket').value = '';
   $('#priceExtender').value = '';
   $('#priceInsulation').value = '';
+  $('#priceHSubsystem').value = '';
   state.walls = [];
   state.openings = [];
   state.consumables = [];
@@ -557,16 +557,17 @@ function calculate(){
   const wasteP = Math.max(0, parseNum($('#waste').value));
   const damageP = Math.max(0, parseNum($('#damagePercent').value));
   const corners = Math.max(0, parseNum($('#corners').value));
-  const orientation = $('#orientation').value;
   const bracketsPerM2 = Math.max(0, parseNum($('#bracketsPerM2').value));
   const insulationThickness = state.insulationThickness;
   const bracketStandardLength = state.bracketStandardLength;
+  const hSubsystemCoeff = Math.max(0, parseNum($('#hSubsystemCoeff').value));
   const pricePanel   = Math.max(0, parseNum($('#pricePanel').value));
   const priceProfile = Math.max(0, parseNum($('#priceProfile').value));
   const priceFast    = Math.max(0, parseNum($('#priceFast').value));
   const priceBracket  = Math.max(0, parseNum($('#priceBracket').value));
   const priceExtender = Math.max(0, parseNum($('#priceExtender').value));
   const priceInsulation = Math.max(0, parseNum($('#priceInsulation').value));
+  const priceHSubsystem = Math.max(0, parseNum($('#priceHSubsystem').value));
 
   const wallsArea = state.walls.reduce((s,w)=> s + Math.max(0,w.width)*Math.max(0,w.height)*Math.max(1,w.count|0), 0);
   const openingsArea = state.openings.reduce((s,o)=> s + Math.max(0,o.width)*Math.max(0,o.height)*Math.max(1,o.count|0), 0);
@@ -578,20 +579,15 @@ function calculate(){
   const panels = ceil((netArea / panelArea) * wasteCoeff * damageCoeff);
 
   let profilesLenRaw = 0;
-  let heightWeighted = 0, countTotal = 0;
+  let heightWeighted = 0, countTotal = 0, widthSum = 0;
   state.walls.forEach(w=>{
-    let perWall;
-    if(orientation === 'horizontal'){
-      const rows = Math.floor(Math.max(0,w.height) / step) + 1;
-      perWall = rows * Math.max(0,w.width);
-    }else{
-      const posts = Math.floor(Math.max(0,w.width) / step) + 1;
-      perWall = posts * Math.max(0,w.height);
-    }
+    const posts = Math.floor(Math.max(0,w.width) / step) + 1;
+    const perWall = posts * Math.max(0,w.height);
     const count = Math.max(1,w.count|0);
     profilesLenRaw += perWall * count;
     heightWeighted += Math.max(0,w.height) * count;
     countTotal += count;
+    widthSum += Math.max(0,w.width) * count;
   });
   const avgHeight = countTotal > 0 ? heightWeighted / countTotal : 0;
   const cornerProfileLen = corners * avgHeight;
@@ -602,6 +598,7 @@ function calculate(){
   const brackets = ceil(netArea * bracketsPerM2);
   const extenders = (insulationThickness > bracketStandardLength) ? brackets : 0;
   const insulationArea = netArea * wasteCoeff;
+  const hSubsystemLen = widthSum * hSubsystemCoeff;
 
   const costPanels    = panels * pricePanel;
   const costProfiles  = profilesLen * priceProfile;
@@ -609,10 +606,11 @@ function calculate(){
   const costBrackets  = brackets * priceBracket;
   const costExtenders = extenders * priceExtender;
   const costInsulation = insulationArea * priceInsulation;
+  const costHSubsystem = hSubsystemLen * priceHSubsystem;
   const costConsumables = state.consumables.reduce((s,c)=> s + Math.max(0,c.qty)*Math.max(0,c.price), 0);
-  const total = costPanels + costProfiles + costFasteners + costBrackets + costExtenders + costInsulation + costConsumables;
+  const total = costPanels + costProfiles + costFasteners + costBrackets + costExtenders + costInsulation + costHSubsystem + costConsumables;
 
-  return {wallsArea, openingsArea, netArea, panels, profilesLen, fasteners, brackets, extenders, insulationArea, costPanels, costProfiles, costFasteners, costBrackets, costExtenders, costInsulation, costConsumables, total, step, fast, wasteP, damageP, corners, orientation};
+  return {wallsArea, openingsArea, netArea, panels, profilesLen, fasteners, brackets, extenders, insulationArea, hSubsystemLen, costPanels, costProfiles, costFasteners, costBrackets, costExtenders, costInsulation, costHSubsystem, costConsumables, total, step, fast, wasteP, damageP, corners};
 }
 
 function renderResults(r){
@@ -626,7 +624,8 @@ function renderResults(r){
     <div class="pill">Крепёж: <b>${r.fasteners}</b></div>
     <div class="pill">Кронштейны: <b>${r.brackets}</b></div>
     <div class="pill">Наращиватели: <b>${r.extenders}</b></div>
-    <div class="pill">Утеплитель: <b>${r.insulationArea.toFixed(2)} м²</b></div>`;
+    <div class="pill">Утеплитель: <b>${r.insulationArea.toFixed(2)} м²</b></div>
+    <div class="pill">Горизонт. подсистема: <b>${r.hSubsystemLen.toFixed(2)} м</b></div>`;
   $('#costs').innerHTML = `
     <div class="table-scroll">
     <table>
@@ -637,12 +636,13 @@ function renderResults(r){
       <tr><td>Кронштейны (шт)</td><td>${r.brackets}</td><td>${parseNum($('#priceBracket').value).toFixed(2)}</td><td>${r.costBrackets.toFixed(2)}</td></tr>
       <tr><td>Наращиватели (шт)</td><td>${r.extenders}</td><td>${parseNum($('#priceExtender').value).toFixed(2)}</td><td>${r.costExtenders.toFixed(2)}</td></tr>
       <tr><td>Утеплитель (м²)</td><td>${r.insulationArea.toFixed(2)}</td><td>${parseNum($('#priceInsulation').value).toFixed(2)}</td><td>${r.costInsulation.toFixed(2)}</td></tr>
+      <tr><td>Горизонтальная подсистема (м)</td><td>${r.hSubsystemLen.toFixed(2)}</td><td>${parseNum($('#priceHSubsystem').value).toFixed(2)}</td><td>${r.costHSubsystem.toFixed(2)}</td></tr>
       <tr><td>Расходные материалы</td><td>${state.consumables.length} поз.</td><td>—</td><td>${r.costConsumables.toFixed(2)}</td></tr>
       <tr><th colspan="3" style="text-align:right">Итого</th><th>${r.total.toFixed(2)}</th></tr>
     </table>
     </div>`;
   const cfg = getUnitCfg();
-  $('#note').textContent = `Тип: ${presets[$('#facadeType').value].name}. Обрешётка: ${r.orientation==='horizontal'?'горизонтальная':'вертикальная'}. Шаг: ${formatForUnit(r.step)} ${cfg.label}, крепёж/панель: ${r.fast}, обрезки: ${r.wasteP}%, бой/брак: ${r.damageP}%, углов: ${r.corners}`;
+  $('#note').textContent = `Тип: ${presets[$('#facadeType').value].name}. Шаг: ${formatForUnit(r.step)} ${cfg.label}, крепёж/панель: ${r.fast}, обрезки: ${r.wasteP}%, бой/брак: ${r.damageP}%, углов: ${r.corners}`;
 }
 
 function markInvalid(el, bad){
@@ -722,17 +722,18 @@ function projectFromUI(){
       waste:  Math.max(0, parseNum($('#waste').value)),
       damagePercent: Math.max(0, parseNum($('#damagePercent').value)),
       corners: Math.max(0, parseNum($('#corners').value)),
-      orientation: $('#orientation').value,
       unit: $('#unit').value,
       bracketsPerM2: Math.max(0, parseNum($('#bracketsPerM2').value)),
       insulationThickness: state.insulationThickness,
       bracketStandardLength: state.bracketStandardLength,
+      hSubsystemCoeff: Math.max(0, parseNum($('#hSubsystemCoeff').value)),
       pricePanel:   Math.max(0, parseNum($('#pricePanel').value)),
       priceProfile: Math.max(0, parseNum($('#priceProfile').value)),
       priceFast:    Math.max(0, parseNum($('#priceFast').value)),
       priceBracket:  Math.max(0, parseNum($('#priceBracket').value)),
       priceExtender: Math.max(0, parseNum($('#priceExtender').value)),
       priceInsulation: Math.max(0, parseNum($('#priceInsulation').value)),
+      priceHSubsystem: Math.max(0, parseNum($('#priceHSubsystem').value)),
     },
     result: calculate(),
     date: new Date().toISOString()
@@ -787,10 +788,10 @@ function loadProjectIdx(i){
   $('#waste').value  = p.params.waste;
   $('#damagePercent').value = p.params.damagePercent != null ? p.params.damagePercent : 5;
   $('#corners').value = p.params.corners != null ? p.params.corners : 4;
-  $('#orientation').value = p.params.orientation || 'vertical';
   $('#bracketsPerM2').value = p.params.bracketsPerM2 != null ? p.params.bracketsPerM2 : 3;
   state.insulationThickness = p.params.insulationThickness != null ? p.params.insulationThickness : 0.1;
   state.bracketStandardLength = p.params.bracketStandardLength != null ? p.params.bracketStandardLength : 0.12;
+  $('#hSubsystemCoeff').value = p.params.hSubsystemCoeff != null ? p.params.hSubsystemCoeff : 1;
   renderPanelFields();
   $('#pricePanel').value   = p.params.pricePanel;
   $('#priceProfile').value = p.params.priceProfile;
@@ -798,6 +799,7 @@ function loadProjectIdx(i){
   $('#priceBracket').value  = p.params.priceBracket || '';
   $('#priceExtender').value = p.params.priceExtender || '';
   $('#priceInsulation').value = p.params.priceInsulation || '';
+  $('#priceHSubsystem').value = p.params.priceHSubsystem || '';
   state.walls = p.walls || [];
   state.openings = p.openings || [];
   state.consumables = p.consumables || [];
@@ -818,7 +820,6 @@ function exportCSV(){
   const rows = [
     ['Объект', p.name],
     ['Тип фасада', presets[p.facadeType] ? presets[p.facadeType].name : p.facadeType],
-    ['Обрешётка', p.params.orientation === 'horizontal' ? 'Горизонтальная' : 'Вертикальная'],
     ['Дата', new Date(p.date).toLocaleString()],
     [],
     ['Позиция','Кол-во','Цена/ед.','Сумма'],
@@ -827,7 +828,8 @@ function exportCSV(){
     ['Крепёж', p.result.fasteners, p.params.priceFast.toFixed(2), p.result.costFasteners.toFixed(2)],
     ['Кронштейны', p.result.brackets, p.params.priceBracket.toFixed(2), p.result.costBrackets.toFixed(2)],
     ['Наращиватели', p.result.extenders, p.params.priceExtender.toFixed(2), p.result.costExtenders.toFixed(2)],
-    ['Утеплитель (м²)', p.result.insulationArea.toFixed(2), p.params.priceInsulation.toFixed(2), p.result.costInsulation.toFixed(2)]
+    ['Утеплитель (м²)', p.result.insulationArea.toFixed(2), p.params.priceInsulation.toFixed(2), p.result.costInsulation.toFixed(2)],
+    ['Горизонтальная подсистема (м)', p.result.hSubsystemLen.toFixed(2), p.params.priceHSubsystem.toFixed(2), p.result.costHSubsystem.toFixed(2)]
   ];
   p.consumables.forEach(c=>{
     rows.push([c.name || 'Расходный материал', c.qty, (+c.price).toFixed(2), (Math.max(0,c.qty)*Math.max(0,c.price)).toFixed(2)]);
@@ -845,10 +847,9 @@ function renderPrintReport(r){
   const name = escapeHtml($('#projectName').value.trim() || 'Без названия');
   const typeName = presets[$('#facadeType').value].name;
   const isCeiling = $('#facadeType').value === 'ceilings';
-  const orientationName = r.orientation === 'horizontal' ? 'горизонтальная' : 'вертикальная';
 
   let html = `<h1>Смета: ${name}</h1>
-    <p>Тип фасада: ${typeName} · Обрешётка: ${orientationName} · Дата: ${new Date().toLocaleDateString('ru-RU')}</p>
+    <p>Тип фасада: ${typeName} · Дата: ${new Date().toLocaleDateString('ru-RU')}</p>
     <h2>${isCeiling ? 'Участки потолка' : 'Стены'}</h2>
     <table><thead><tr><th>Ширина, м</th><th>Высота, м</th><th>Кол-во</th><th>Площадь, м²</th></tr></thead><tbody>`;
   state.walls.forEach(w=>{
@@ -868,7 +869,8 @@ function renderPrintReport(r){
       <tr><td>Крепёж (шт)</td><td>${r.fasteners}</td><td>${parseNum($('#priceFast').value).toFixed(2)}</td><td>${r.costFasteners.toFixed(2)}</td></tr>
       <tr><td>Кронштейны (шт)</td><td>${r.brackets}</td><td>${parseNum($('#priceBracket').value).toFixed(2)}</td><td>${r.costBrackets.toFixed(2)}</td></tr>
       <tr><td>Наращиватели (шт)</td><td>${r.extenders}</td><td>${parseNum($('#priceExtender').value).toFixed(2)}</td><td>${r.costExtenders.toFixed(2)}</td></tr>
-      <tr><td>Утеплитель (м²)</td><td>${r.insulationArea.toFixed(2)}</td><td>${parseNum($('#priceInsulation').value).toFixed(2)}</td><td>${r.costInsulation.toFixed(2)}</td></tr>`;
+      <tr><td>Утеплитель (м²)</td><td>${r.insulationArea.toFixed(2)}</td><td>${parseNum($('#priceInsulation').value).toFixed(2)}</td><td>${r.costInsulation.toFixed(2)}</td></tr>
+      <tr><td>Горизонтальная подсистема (м)</td><td>${r.hSubsystemLen.toFixed(2)}</td><td>${parseNum($('#priceHSubsystem').value).toFixed(2)}</td><td>${r.costHSubsystem.toFixed(2)}</td></tr>`;
   state.consumables.forEach(c=>{
     html += `<tr><td>${escapeHtml(c.name || 'Расходный материал')}</td><td>${c.qty}</td><td>${(+c.price).toFixed(2)}</td><td>${(Math.max(0,c.qty)*Math.max(0,c.price)).toFixed(2)}</td></tr>`;
   });
@@ -884,7 +886,7 @@ function printPDF(){
 }
 
 // Bind base inputs for auto-recalc
-['fasteners','waste','damagePercent','corners','bracketsPerM2','pricePanel','priceProfile','priceFast','priceBracket','priceExtender','priceInsulation','projectName'].forEach(id=>{
+['fasteners','waste','damagePercent','corners','bracketsPerM2','hSubsystemCoeff','pricePanel','priceProfile','priceFast','priceBracket','priceExtender','priceInsulation','priceHSubsystem','projectName'].forEach(id=>{
   on(document.getElementById(id),'input', e=>{ recalc(); scheduleHistoryCommit(); });
 });
 on($('#panelW'),'input', e=>{ state.panelW = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
@@ -893,7 +895,6 @@ on($('#step'),'input', e=>{ state.step = displayToMeters(e.target.value); recalc
 on($('#insulationThickness'),'input', e=>{ state.insulationThickness = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
 on($('#bracketStandardLength'),'input', e=>{ state.bracketStandardLength = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
 on($('#unit'),'change', e=>{ renderPanelFields(); renderTables(); updateUnitLabels(); recalc(); commitHistoryImmediate(); });
-on($('#orientation'),'change', e=>{ recalc(); commitHistoryImmediate(); });
 on($('#facadeType'),'change', e=>{ state.facadeType = e.target.value; applyPreset(state.facadeType); commitHistoryImmediate(); });
 
 // Buttons
