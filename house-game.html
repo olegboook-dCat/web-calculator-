@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Стройка: симулятор постройки дома</title>
+<style>
+  :root {
+    --bg: #f2f4f8;
+    --card: #ffffff;
+    --ink: #1c2333;
+    --muted: #5b6478;
+    --accent: #1f6feb;
+    --accent-dark: #1557bd;
+    --good: #1a7f37;
+    --bad: #c62828;
+    --warn: #b26a00;
+    --line: #dde2ec;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 16px;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 16px; }
+  header h1 { font-size: 26px; }
+  header p { color: var(--muted); font-size: 14px; margin-top: 4px; }
+
+  .hud {
+    display: flex; flex-wrap: wrap; gap: 10px;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 12px 14px; margin-bottom: 14px;
+  }
+  .hud .stat { flex: 1 1 130px; min-width: 120px; }
+  .hud .stat .label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+  .hud .stat .value { font-size: 17px; font-weight: 700; margin-top: 2px; }
+  .hud .stat .value.neg { color: var(--bad); }
+
+  .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 820px) { .layout { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 16px;
+  }
+  .card h2 { font-size: 17px; margin-bottom: 4px; }
+  .card .sub { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+
+  .plot-info { font-size: 13.5px; line-height: 1.7; background: #f7f9fd; border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
+  .plot-info b { font-weight: 600; }
+
+  .option {
+    display: block; width: 100%; text-align: left;
+    border: 1.5px solid var(--line); border-radius: 12px;
+    background: #fff; padding: 12px 14px; margin-bottom: 10px;
+    cursor: pointer; font: inherit; transition: border-color .15s, background .15s;
+  }
+  .option:hover:not(:disabled) { border-color: var(--accent); background: #f4f8ff; }
+  .option:disabled { opacity: .5; cursor: not-allowed; }
+  .option .name { display: block; font-weight: 700; font-size: 15px; }
+  .option .desc { display: block; color: var(--muted); font-size: 13px; margin-top: 3px; line-height: 1.45; }
+  .option .meta { display: block; margin-top: 6px; font-size: 12.5px; color: var(--ink); }
+  .option .meta span { display: inline-block; margin-right: 12px; }
+
+  .check-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    border: 1.5px solid var(--line); border-radius: 12px;
+    padding: 11px 13px; margin-bottom: 9px; cursor: pointer;
+  }
+  .check-row input { margin-top: 4px; width: 17px; height: 17px; accent-color: var(--accent); }
+  .check-row.checked { border-color: var(--accent); background: #f4f8ff; }
+
+  .btn {
+    display: inline-block; border: none; border-radius: 10px;
+    background: var(--accent); color: #fff; font: inherit; font-weight: 700;
+    padding: 11px 22px; cursor: pointer;
+  }
+  .btn:hover { background: var(--accent-dark); }
+  .btn.secondary { background: #e8ecf4; color: var(--ink); }
+
+  #scene { width: 100%; height: auto; display: block; border-radius: 10px; background: linear-gradient(#cfe8ff 0%, #e8f4ff 62%, #e8f4ff 100%); }
+
+  .log { max-height: 260px; overflow-y: auto; font-size: 13px; }
+  .log .entry { padding: 7px 10px; border-radius: 8px; margin-bottom: 6px; background: #f7f9fd; line-height: 1.45; }
+  .log .entry.good { background: #eaf6ec; color: #14532d; }
+  .log .entry.bad { background: #fdecea; color: #7f1d1d; }
+  .log .entry.warn { background: #fff4e0; color: #7c4a03; }
+  .log .entry .day { font-weight: 700; opacity: .7; margin-right: 6px; }
+
+  .quality-bar { height: 10px; border-radius: 6px; background: #e8ecf4; overflow: hidden; margin-top: 6px; }
+  .quality-bar i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, #c62828, #f2a341 45%, #1a7f37); transition: width .4s; }
+
+  .final { text-align: center; }
+  .final .stars { font-size: 34px; letter-spacing: 4px; margin: 10px 0; }
+  .final .verdict { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+  .final ul { text-align: left; margin: 12px auto; max-width: 480px; font-size: 13.5px; line-height: 1.6; color: var(--muted); }
+  .final ul li { margin-bottom: 4px; }
+  .final .mist { color: var(--bad); }
+
+  .stage-tag { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--accent); background: #eaf1fe; border-radius: 6px; padding: 3px 8px; margin-bottom: 8px; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 18px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🏠 Стройка: построй дом без ошибок</h1>
+    <p>Пошаговый симулятор загородного строительства. Учитывай грунт, сезон, технологию и бюджет — как в жизни.</p>
+  </header>
+
+  <div class="hud">
+    <div class="stat"><div class="label">Бюджет</div><div class="value" id="hud-money">—</div></div>
+    <div class="stat"><div class="label">День стройки</div><div class="value" id="hud-day">—</div></div>
+    <div class="stat"><div class="label">Сезон</div><div class="value" id="hud-season">—</div></div>
+    <div class="stat">
+      <div class="label">Качество дома</div>
+      <div class="value" id="hud-quality">—</div>
+      <div class="quality-bar"><i id="quality-fill" style="width:50%"></i></div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div>
+      <div class="card" id="stage-card">
+        <!-- заполняется скриптом -->
+      </div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:14px;">
+        <h2>Ваш дом</h2>
+        <svg id="scene" viewBox="0 0 400 260" role="img" aria-label="Схема строящегося дома">
+          <!-- солнце / погода -->
+          <circle id="sun" cx="352" cy="40" r="20" fill="#ffd54d"/>
+          <text id="weather-emoji" x="330" y="52" font-size="30" style="display:none">🌧️</text>
+          <!-- земля -->
+          <rect x="0" y="200" width="400" height="60" fill="#8bbf6a"/>
+          <rect id="soil-cut" x="0" y="216" width="400" height="44" fill="#a97c50"/>
+          <!-- дерево -->
+          <rect x="30" y="168" width="8" height="34" fill="#7a5230"/>
+          <circle cx="34" cy="158" r="20" fill="#5f9e4a"/>
+          <!-- слои дома -->
+          <g id="lay-survey" style="display:none">
+            <rect x="120" y="196" width="180" height="4" fill="#e2544a"/>
+            <line x1="120" y1="188" x2="120" y2="204" stroke="#e2544a" stroke-width="2"/>
+            <line x1="300" y1="188" x2="300" y2="204" stroke="#e2544a" stroke-width="2"/>
+          </g>
+          <g id="lay-foundation" style="display:none">
+            <rect id="found-shape" x="118" y="188" width="184" height="14" fill="#9aa3b2" stroke="#6b7382"/>
+          </g>
+          <g id="lay-walls" style="display:none">
+            <rect id="walls-shape" x="124" y="118" width="172" height="72" fill="#e6d3b3" stroke="#b39b73"/>
+          </g>
+          <g id="lay-roof" style="display:none">
+            <polygon id="roof-shape" points="112,120 210,64 308,120" fill="#b0413e" stroke="#7d2d2b"/>
+          </g>
+          <g id="lay-windows" style="display:none">
+            <rect x="142" y="136" width="30" height="30" fill="#bfe3ff" stroke="#5b7d99"/>
+            <rect x="248" y="136" width="30" height="30" fill="#bfe3ff" stroke="#5b7d99"/>
+            <rect x="196" y="140" width="28" height="50" fill="#8a5a33" stroke="#5f3d20"/>
+            <circle cx="219" cy="166" r="2.4" fill="#e8c069"/>
+          </g>
+          <g id="lay-engineering" style="display:none">
+            <rect x="268" y="72" width="14" height="34" fill="#8d6a4c" stroke="#5f4630"/>
+            <path id="smoke" d="M275 68 q -6 -8 2 -14 q 8 -6 2 -14" fill="none" stroke="#c9d2df" stroke-width="4" stroke-linecap="round"/>
+          </g>
+          <g id="lay-facade" style="display:none">
+            <rect id="facade-shape" x="124" y="118" width="172" height="72" fill="#f5e9d0" stroke="#c9b48a" opacity="0.95"/>
+            <rect x="142" y="136" width="30" height="30" fill="#bfe3ff" stroke="#5b7d99"/>
+            <rect x="248" y="136" width="30" height="30" fill="#bfe3ff" stroke="#5b7d99"/>
+            <rect x="196" y="140" width="28" height="50" fill="#8a5a33" stroke="#5f3d20"/>
+            <circle cx="219" cy="166" r="2.4" fill="#e8c069"/>
+          </g>
+          <g id="lay-finish" style="display:none">
+            <rect x="150" y="196" width="120" height="4" fill="#d9c49a"/>
+            <circle cx="330" cy="192" r="10" fill="#d9646a"/>
+            <rect x="328" y="192" width="4" height="12" fill="#4c7a3f"/>
+          </g>
+          <g id="cracks" style="display:none">
+            <path d="M150 190 l 6 -14 l -4 -10 l 7 -12" fill="none" stroke="#7a6a4f" stroke-width="1.6"/>
+            <path d="M262 190 l -5 -16 l 6 -9" fill="none" stroke="#7a6a4f" stroke-width="1.6"/>
+          </g>
+        </svg>
+      </div>
+      <div class="card">
+        <h2>Журнал стройки</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>Игра работает целиком в браузере, ничего не отправляет и не сохраняет. Обновите страницу или нажмите «Начать заново», чтобы сыграть ещё раз — участок каждый раз новый.</footer>
+</div>
+
+<script>
+"use strict";
+
+/* ---------- справочники ---------- */
+
+const SEASONS = ["Весна 🌱", "Лето ☀️", "Осень 🍂", "Зима ❄️"];
+const DAYS_PER_SEASON = 90;
+
+const SOILS = {
+  sand:  { name: "песок",     desc: "надёжное основание, вода уходит быстро" },
+  loam:  { name: "суглинок",  desc: "типичный грунт средней полосы, умеренное пучение" },
+  clay:  { name: "глина",     desc: "сильное морозное пучение, плохо отводит воду" },
+  peat:  { name: "торфяник",  desc: "слабый сжимаемый грунт — обычный фундамент «поплывёт»" }
+};
+
+const fmtMoney = n => n.toLocaleString("ru-RU") + " ₽";
+const fmtDays = n => {
+  const m10 = n % 10, m100 = n % 100;
+  const w = (m10 === 1 && m100 !== 11) ? "день" : (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) ? "дня" : "дней";
+  return n + " " + w;
+};
+
+/* ---------- состояние ---------- */
+
+let S = null;
+
+function newGame() {
+  const soilKeys = Object.keys(SOILS);
+  S = {
+    money: 4200000,
+    day: 1,
+    startSeason: Math.floor(Math.random() * 4),
+    quality: 50,
+    soil: soilKeys[Math.floor(Math.random() * soilKeys.length)],
+    highWater: Math.random() < 0.45,
+    soilKnown: false,
+    flags: {},          // concrete, timber, frame, gasblock, brick, tempRoof, ventilation, heating, ...
+    priceMul: 1,        // множитель после «подорожания»
+    mistakes: [],
+    achievements: [],
+    stageIdx: 0,
+    finished: false
+  };
+  document.getElementById("log").innerHTML = "";
+  for (const g of document.querySelectorAll("#scene g[id^='lay-'], #cracks")) g.style.display = "none";
+  document.getElementById("weather-emoji").style.display = "none";
+  log("Вы купили участок 10 соток и решили построить дом. Бюджет — " + fmtMoney(S.money) + ". Удачи!", "");
+  renderStage();
+  renderHud();
+}
+
+/* ---------- сезон и погода ---------- */
+
+function seasonIdx() { return (S.startSeason + Math.floor((S.day - 1) / DAYS_PER_SEASON)) % 4; }
+function isWinter() { return seasonIdx() === 3; }
+function isAutumn() { return seasonIdx() === 2; }
+
+/* ---------- журнал и HUD ---------- */
+
+function log(text, cls) {
+  const el = document.createElement("div");
+  el.className = "entry" + (cls ? " " + cls : "");
+  el.innerHTML = '<span class="day">День ' + S.day + ".</span> " + text;
+  const box = document.getElementById("log");
+  box.prepend(el);
+}
+
+function renderHud() {
+  const m = document.getElementById("hud-money");
+  m.textContent = fmtMoney(S.money);
+  m.classList.toggle("neg", S.money < 0);
+  document.getElementById("hud-day").textContent = S.day;
+  document.getElementById("hud-season").textContent = SEASONS[seasonIdx()];
+  const q = Math.max(0, Math.min(100, S.quality));
+  document.getElementById("hud-quality").textContent = q + " / 100";
+  document.getElementById("quality-fill").style.width = q + "%";
+}
+
+function spend(cost, days) {
+  const real = Math.round(cost * S.priceMul);
+  S.money -= real;
+  S.day += days;
+  if (S.money < 0 && cost > 0) {
+    log("Денег не хватило — пришлось взять " + fmtMoney(-S.money) + " в кредит. Проценты съедят часть качества жизни в новом доме.", "warn");
+  }
+  return real;
+}
+
+function addQuality(d) { S.quality += d; }
+function mistake(text) { S.mistakes.push(text); }
+function achieve(text) { S.achievements.push(text); }
+
+/* ---------- визуализация ---------- */
+
+function showLayer(id) { const el = document.getElementById(id); if (el) el.style.display = ""; }
+
+function paintHouse() {
+  const f = S.flags;
+  if (f.foundation) {
+    showLayer("lay-foundation");
+    const shape = document.getElementById("found-shape");
+    if (f.foundation === "piles") { shape.setAttribute("fill", "#7d8794"); shape.setAttribute("y", "182"); shape.setAttribute("height", "20"); }
+    if (f.foundation === "slab") { shape.setAttribute("height", "18"); shape.setAttribute("y", "184"); }
+  }
+  if (f.walls) {
+    showLayer("lay-walls");
+    const w = document.getElementById("walls-shape");
+    const colors = { brick: "#c96f4e", gasblock: "#e8e8e2", timber: "#c99a5b", frame: "#d8cba8" };
+    w.setAttribute("fill", colors[f.walls] || "#e6d3b3");
+  }
+  if (f.roof) {
+    showLayer("lay-roof");
+    const r = document.getElementById("roof-shape");
+    if (f.roof === "temp") r.setAttribute("fill", "#4a4f57");
+    if (f.roof === "soft") r.setAttribute("fill", "#5d7a4f");
+  }
+  if (f.windows) showLayer("lay-windows");
+  if (f.engineering) showLayer("lay-engineering");
+  if (f.facade) showLayer("lay-facade");
+  if (f.finishDone) showLayer("lay-finish");
+  if (f.cracked) showLayer("cracks");
+}
+
+/* ---------- этапы ---------- */
+
+const STAGES = [
+
+  /* 1. Изыскания и проект */
+  {
+    tag: "Этап 1 из 9",
+    title: "Изыскания и проект",
+    sub: "С чего начинается любая стройка? Правильно — с бумажек. Или нет?",
+    plotInfo: () => "Участок: 10 соток, подъезд есть, электричество по границе.<br>Грунт: <b>неизвестен</b> — без изысканий можно только гадать.",
+    options: () => [
+      {
+        name: "Геология + индивидуальный проект",
+        desc: "Бурение скважин покажет грунт и уровень воды. Проектировщик подберёт фундамент и конструктив под ваши условия.",
+        cost: 180000, days: 30,
+        run() {
+          S.soilKnown = true; S.flags.project = "full"; addQuality(10);
+          achieve("Провели геологию — фундамент выбирали не вслепую.");
+          log("Геологи пробурили скважины: грунт — <b>" + SOILS[S.soil].name + "</b> (" + SOILS[S.soil].desc + "), грунтовые воды " + (S.highWater ? "<b>высокие</b> — весной участок подтапливает" : "низкие") + ". Проект готов.", "good");
+        }
+      },
+      {
+        name: "Типовой проект из интернета",
+        desc: "Красивая картинка и готовые чертежи. Но проект ничего не знает про ваш грунт.",
+        cost: 40000, days: 10,
+        run() {
+          S.flags.project = "typical"; addQuality(2);
+          log("Скачали типовой проект. Что под ногами — по-прежнему загадка: фундамент придётся выбирать наугад.", "warn");
+        }
+      },
+      {
+        name: "«Сосед строил без проекта — и я смогу»",
+        desc: "Бесплатно и быстро. Что может пойти не так?",
+        cost: 0, days: 1,
+        run() {
+          S.flags.project = "none"; addQuality(-8);
+          mistake("Строили без проекта — размеры и узлы додумывали по ходу дела.");
+          log("Решили строить «по месту». Бригады такое любят: можно списать на «так в проекте было»... которого нет.", "bad");
+        }
+      }
+    ]
+  },
+
+  /* 2. Фундамент */
+  {
+    tag: "Этап 2 из 9",
+    title: "Фундамент",
+    sub: "Единственная часть дома, которую нельзя переделать. Выбирайте под грунт, а не под кошелёк.",
+    plotInfo: () => S.soilKnown
+      ? "По геологии: грунт — <b>" + SOILS[S.soil].name + "</b>, вода " + (S.highWater ? "<b>высокая</b>" : "низкая") + "."
+      : "Грунт <b>неизвестен</b>. Придётся полагаться на удачу.",
+    options: () => [
+      {
+        name: "Монолитная плита",
+        desc: "«Плавающий» фундамент — работает почти на любом грунте, сразу готовый черновой пол. Дорого.",
+        cost: 750000, days: 20,
+        run() {
+          S.flags.foundation = "slab"; S.flags.concrete = true; addQuality(12);
+          winterConcreteCheck();
+          log("Залили монолитную плиту. Дорого, зато спокойно: плита распределяет нагрузку и не боится слабых грунтов.", "good");
+        }
+      },
+      {
+        name: "Ленточный заглублённый",
+        desc: "Классика: лента ниже глубины промерзания. Надёжен на большинстве грунтов, но не на торфе.",
+        cost: 520000, days: 24,
+        run() {
+          S.flags.foundation = "strip"; S.flags.concrete = true;
+          winterConcreteCheck();
+          if (S.soil === "peat") {
+            addQuality(-25); S.flags.badFoundation = true;
+            mistake("Ленточный фундамент на торфянике — основание слабое, дом даст неравномерную осадку.");
+            log("Лента залита... но под ней торф. Слабый грунт сжимается неравномерно — жди перекосов и трещин.", "bad");
+          } else {
+            addQuality(10);
+            if (S.highWater) { addQuality(-6); log("Лента готова, но грунтовые воды высокие — без дренажа и гидроизоляции подвал будет сырым.", "warn"); mistake("Высокие грунтовые воды: заглублённой ленте нужен был дренаж."); }
+            else log("Заглублённая лента залита ниже глубины промерзания. Морозное пучение ей не страшно.", "good");
+          }
+        }
+      },
+      {
+        name: "Мелкозаглублённая лента (МЗЛФ)",
+        desc: "Экономвариант: лента глубиной 40–60 см. Хорош на песке, опасен на пучинистых и слабых грунтах.",
+        cost: 320000, days: 14,
+        run() {
+          S.flags.foundation = "shallow"; S.flags.concrete = true;
+          winterConcreteCheck();
+          if (S.soil === "peat") {
+            addQuality(-30); S.flags.badFoundation = true;
+            mistake("МЗЛФ на торфянике — фундамент «поплыл» вместе с домом.");
+            log("Сэкономили... МЗЛФ на торфе — почти гарантированные просадки. Стройка превращается в лотерею.", "bad");
+          } else if (S.soil === "clay" || (S.soil === "loam" && S.highWater)) {
+            addQuality(-18); S.flags.badFoundation = true;
+            mistake("МЗЛФ на пучинистом грунте без утепления отмостки — зимой ленту будет «гулять».");
+            log("На " + SOILS[S.soil].name + "е с " + (S.highWater ? "высокой водой " : "") + "морозное пучение будет поднимать мелкую ленту каждую зиму.", "bad");
+          } else {
+            addQuality(7);
+            log("На " + SOILS[S.soil].name + "е мелкозаглублённая лента — разумная экономия. Главное — утеплённая отмостка.", "good");
+          }
+        }
+      },
+      {
+        name: "Винтовые сваи",
+        desc: "Быстро, без бетона, отлично для слабых и мокрых грунтов. Минус — холодный продуваемый цоколь.",
+        cost: 260000, days: 5,
+        run() {
+          S.flags.foundation = "piles"; addQuality(6);
+          if (S.soil === "peat" || S.highWater) { addQuality(6); achieve("Сваи на слабом/мокром грунте — грамотное решение."); log("Сваи закрутили за несколько дней до плотного слоя. Для " + SOILS[S.soil].name + "а — отличный выбор.", "good"); }
+          else log("Сваи стоят. Работает, но не забудьте утеплить пол и закрыть цоколь — иначе снизу будет дуть.", "");
+        }
+      }
+    ]
+  },
+
+  /* 3. Выдержка бетона (условный) */
+  {
+    tag: "Технологическая пауза",
+    title: "Бетон набирает прочность",
+    sub: "Бетон достигает марочной прочности за 28 суток. Нагружать раньше — рисковать трещинами.",
+    condition: () => !!S.flags.concrete,
+    plotInfo: () => "Фундамент залит. Прораб спрашивает: ждём или начинаем класть стены?",
+    options: () => [
+      {
+        name: "Выдержать 28 суток, ухаживать за бетоном",
+        desc: "Поливать и укрывать плёнкой в жару, чтобы не пересох. Скучно, зато по технологии.",
+        cost: 5000, days: 28,
+        run() { addQuality(8); achieve("Дали бетону набрать прочность — по учебнику."); log("Месяц ухаживали за бетоном. Фундамент набрал марочную прочность — можно нагружать.", "good"); }
+      },
+      {
+        name: "Подождать неделю и начать",
+        desc: "70% прочности бетон набирает примерно за неделю. Строители часто так делают. Небольшой риск.",
+        cost: 0, days: 7,
+        run() {
+          if (Math.random() < 0.3) { addQuality(-6); mistake("Нагрузили недозревший бетон — по цоколю пошли волосяные трещины."); log("Начали кладку через неделю. По цоколю пошли мелкие трещины — бетон ещё «дышал».", "bad"); }
+          else { addQuality(2); log("Рискнули и начали через неделю. В этот раз пронесло — бетон успел схватиться достаточно.", ""); }
+        }
+      },
+      {
+        name: "Строить сразу — время не ждёт!",
+        desc: "Каждый день простоя — деньги. Бетон? Какой бетон?",
+        cost: 0, days: 1,
+        run() { addQuality(-12); S.flags.cracked = true; mistake("Начали кладку по свежему бетону — фундамент получил трещины под нагрузкой."); log("Кладка по двухдневному бетону... Фундамент треснул под весом первых рядов. Больно смотреть.", "bad"); }
+      }
+    ]
+  },
+
+  /* 4. Стены */
+  {
+    tag: "Этап 3 из 9",
+    title: "Коробка: из чего строим стены",
+    sub: "У каждого материала свои нюансы: усадка, армопояс, паробарьер. Дьявол — в деталях.",
+    plotInfo: () => "Фундамент готов. Пора выбирать материал стен — от него зависят и сроки, и дальнейшие этапы.",
+    options: () => [
+      {
+        name: "Кирпич",
+        desc: "Вечная классика: тепло­ёмкий, прочный, не горит. Дорого и долго, каменщики на вес золота.",
+        cost: 1150000, days: 60,
+        run() { S.flags.walls = "brick"; addQuality(12); log("Кирпичная коробка растёт два месяца, но выглядит на века. Соседи завидуют.", "good"); }
+      },
+      {
+        name: "Газобетон",
+        desc: "Тёплый, ровный, быстро кладётся. Нюанс: хрупкий на изгиб — обязателен армопояс под перекрытия и крышу.",
+        cost: 780000, days: 35,
+        extra: { type: "check", label: "Залить армопояс (+70 000 ₽, +6 дней)", key: "armopoyas" },
+        run(extras) {
+          S.flags.walls = "gasblock";
+          if (extras.armopoyas) { spend(70000, 6); addQuality(12); achieve("Армопояс по газобетону — трещин от точечных нагрузок не будет."); log("Газобетонная коробка с монолитным армопоясом. Перекрытия и мауэрлат лягут на бетон, а не на хрупкий блок.", "good"); }
+          else { addQuality(-10); S.flags.cracked = true; mistake("Газобетон без армопояса — балки продавили блоки, по стенам пошли трещины."); log("Сэкономили на армопоясе. Балки перекрытия точечно давят на газобетон — над проёмами появились трещины.", "bad"); }
+        }
+      },
+      {
+        name: "Брус естественной влажности",
+        desc: "Дышащий, красивый, недорогой. Главный нюанс: даёт усадку до 5–8 см — отделку придётся отложить.",
+        cost: 690000, days: 30,
+        run() { S.flags.walls = "timber"; addQuality(8); log("Сруб собран. Помните: брус будет усыхать и садиться примерно год. Окна — на обсадах, отделка — потом.", ""); }
+      },
+      {
+        name: "Каркасник",
+        desc: "Быстро и недорого. Нюанс: качество на 100% зависит от утепления, пароизоляции и рук монтажников.",
+        cost: 560000, days: 21,
+        run() { S.flags.walls = "frame"; addQuality(7); log("Каркас собран за три недели. Теперь всё решит пирог стены: утеплитель, плёнки, вентзазор. Ошибки прячутся внутри.", ""); }
+      }
+    ]
+  },
+
+  /* 5. Крыша */
+  {
+    tag: "Этап 4 из 9",
+    title: "Крыша",
+    sub: "Коробку нельзя оставлять открытой: дождь и снег быстро испортят стены и перекрытия.",
+    plotInfo: () => "Коробка стоит. " + (isAutumn() || isWinter() ? "<b>На дворе " + SEASONS[seasonIdx()].toLowerCase() + " — тянуть с кровлей опасно!</b>" : "Погода пока щадит, но расслабляться рано."),
+    options: () => [
+      {
+        name: "Металлочерепица + полный пирог",
+        desc: "Гидроизоляция, контробрешётка, вентзазор — всё по уму. Служит 30–50 лет.",
+        cost: 420000, days: 18,
+        run() { S.flags.roof = "metal"; addQuality(10); log("Крыша закрыта металлочерепицей с правильным кровельным пирогом. Дому больше не страшен дождь.", "good"); }
+      },
+      {
+        name: "Гибкая черепица",
+        desc: "Тихая под дождём, красивая. Нужно сплошное основание из ОСП — чуть дороже и дольше.",
+        cost: 470000, days: 22,
+        run() { S.flags.roof = "soft"; addQuality(10); log("Мягкая кровля уложена на сплошное основание. Дождь теперь звучит уютно, а не тревожно.", "good"); }
+      },
+      {
+        name: "Временная кровля из рубероида",
+        desc: "«Перезимуем, а весной сделаем нормально». Дёшево, но это всегда риск протечек.",
+        cost: 90000, days: 6,
+        run() {
+          S.flags.roof = "temp"; addQuality(-6);
+          mistake("Оставили дом под временной кровлей — рубероид на ветру живёт недолго.");
+          log("Натянули рубероид. Каждый сильный ветер теперь — маленькая лотерея.", "warn");
+          if (Math.random() < 0.5) { addQuality(-6); S.day += 5; log("Штормовой ветер порвал рубероид, перекрытие намокло. Латаем и сушим.", "bad"); }
+        }
+      }
+    ]
+  },
+
+  /* 6. Окна и двери */
+  {
+    tag: "Этап 5 из 9",
+    title: "Окна и двери",
+    sub: "Тепловой контур: без него внутри не сделать ничего — отделка и стяжка требуют плюсовой температуры.",
+    plotInfo: () => S.flags.walls === "timber"
+      ? "Внимание: в срубе окна ставят в <b>обсаду (окосячку)</b> — иначе усадка выдавит рамы."
+      : "Коробка под крышей. Закрываем тепловой контур.",
+    options: () => [
+      {
+        name: "Качественные окна, монтаж по ГОСТ",
+        desc: "Двухкамерные стеклопакеты, монтажные ленты ПСУЛ, тёплый порог." ,
+        cost: 280000, days: 8,
+        run() {
+          S.flags.windows = true; addQuality(8);
+          if (S.flags.walls === "timber") { spend(60000, 4); achieve("Окна в срубе поставили в обсаду — усадка им не страшна."); log("Окна смонтированы по ГОСТ, в срубе — через обсаду. Монтажная пена закрыта лентами, промерзать не будет.", "good"); }
+          else log("Окна установлены по ГОСТ: с пароизоляционными лентами, а не «запенил и забыл».", "good");
+        }
+      },
+      {
+        name: "Эконом-окна, монтаж «на пену»",
+        desc: "Однокамерные, без лент. Пена без защиты разрушается от ультрафиолета за пару лет.",
+        cost: 150000, days: 5,
+        run() {
+          S.flags.windows = true; addQuality(-4);
+          mistake("Окна смонтированы «на пену» без лент — через пару лет швы начнут продувать.");
+          if (S.flags.walls === "timber" && Math.random() < 0.6) { addQuality(-8); S.flags.cracked = true; mistake("В срубе окна поставили без обсады — усадка перекосила рамы."); log("В срубе окна воткнули жёстко, без обсады. Брус сядет — рамы перекосит. Уже похрустывает...", "bad"); }
+          else log("Дёшево и сердито. Зимой у окон будет ощутимо дуть, но тепловой контур закрыт.", "warn");
+        }
+      }
+    ]
+  },
+
+  /* 7. Инженерные системы */
+  {
+    tag: "Этап 6 из 9",
+    title: "Инженерные системы",
+    sub: "Выберите, что заводить в дом. Про вентиляцию в частных домах забывают чаще всего — и зря.",
+    type: "multi",
+    plotInfo: () => "Все коммуникации разводят <b>до</b> отделки. Потом — только штробить и переделывать.",
+    multiOptions: () => [
+      { key: "electric", label: "Электрика: щит, медная разводка, УЗО", cost: 180000, days: 12, required: true },
+      { key: "water", label: "Водоснабжение и канализация (скважина + септик)", cost: 260000, days: 15, required: true },
+      { key: "heating", label: "Отопление: котёл и радиаторы", cost: 320000, days: 14, required: true },
+      { key: "ventilation", label: "Вентиляция: приточные клапаны + вытяжные каналы", cost: 90000, days: 6, required: false },
+      { key: "warmfloor", label: "Тёплый пол в санузлах и прихожей (комфорт)", cost: 110000, days: 7, required: false }
+    ],
+    runMulti(selected) {
+      S.flags.engineering = true;
+      let msgs = [];
+      if (!selected.electric || !selected.water || !selected.heating) {
+        addQuality(-20);
+        mistake("Дом остался без базовых коммуникаций — жить в нём нельзя.");
+        msgs.push(["Без " + [!selected.electric && "электрики", !selected.water && "воды", !selected.heating && "отопления"].filter(Boolean).join(", ") + " это не дом, а сарай с окнами.", "bad"]);
+      } else {
+        addQuality(10);
+        msgs.push(["Базовые коммуникации разведены до отделки — как и положено.", "good"]);
+      }
+      if (selected.ventilation) {
+        S.flags.ventilation = true; addQuality(7);
+        achieve("Не забыли про вентиляцию — в доме будет сухо и свежо.");
+        msgs.push(["Вентиляция смонтирована. В современном герметичном доме без неё — конденсат, плесень и духота.", "good"]);
+      } else {
+        addQuality(-10);
+        mistake("Забыли вентиляцию: пластиковые окна + герметичный контур = запотевшие стёкла и плесень в углах.");
+        msgs.push(["Вентиляцию решили не делать. Первой же зимой окна заплачут, а в углах появятся тёмные пятна.", "bad"]);
+        if (S.flags.walls === "frame" || S.flags.walls === "gasblock") { addQuality(-5); msgs.push(["Для " + (S.flags.walls === "frame" ? "каркасника" : "газобетона") + " это особенно критично — влаге некуда уходить.", "bad"]); }
+      }
+      if (selected.warmfloor) { addQuality(4); msgs.push(["Тёплый пол — та мелочь, за которую себя благодарят каждое утро.", "good"]); }
+      for (const [t, c] of msgs) log(t, c);
+    }
+  },
+
+  /* 8. Утепление и фасад */
+  {
+    tag: "Этап 7 из 9",
+    title: "Утепление и фасад",
+    sub: "Главное правило: паропроницаемость слоёв должна расти изнутри наружу. Иначе точка росы окажется в стене.",
+    plotInfo: () => {
+      let extra = "";
+      if (S.flags.walls === "frame") extra = "<br><b>Каркасник:</b> пароизоляция изнутри обязательна — без неё утеплитель наберёт влагу и перестанет работать.";
+      if (S.flags.foundation === "piles") extra = "<br><b>Свайный фундамент:</b> не забудьте утеплить пол и закрыть цоколь.";
+      return "Коробка с окнами и коммуникациями готова. Утепляем и закрываем фасад." + extra;
+    },
+    options: () => [
+      {
+        name: "Полное утепление по расчёту + вентфасад",
+        desc: "Минвата нужной толщины, ветрозащита, вентзазор. Тёплый дом и низкие счета за отопление.",
+        cost: 380000, days: 20,
+        run() {
+          S.flags.facade = true; S.flags.insulated = true; addQuality(12);
+          if (S.flags.foundation === "piles") { spend(60000, 5); achieve("Утеплили пол и цоколь на сваях — снизу дуть не будет."); }
+          if (S.flags.walls === "frame") achieve("Каркасник утеплён с правильным пирогом — пароизоляция изнутри, ветрозащита снаружи.");
+          log("Фасад утеплён по расчёту, с ветрозащитой и вентзазором. Дом «одет» по погоде.", "good");
+        }
+      },
+      {
+        name: "Утеплить «как у всех», 50 мм пенопласта",
+        desc: "Дёшево. Для нашего климата откровенно мало, а на дышащих стенах пенопласт может запереть влагу.",
+        cost: 190000, days: 12,
+        run() {
+          S.flags.facade = true; addQuality(-4);
+          mistake("Утепление тоньше расчётного — котёл будет работать на улицу.");
+          if (S.flags.walls === "gasblock" || S.flags.walls === "timber") { addQuality(-6); mistake("Паронепроницаемый пенопласт на дышащей стене — влага заперта в конструкции."); log("Пенопласт на " + (S.flags.walls === "timber" ? "срубе" : "газобетоне") + " — влага из стены не выйдет наружу. Стена будет мокнуть изнутри.", "bad"); }
+          else log("Утеплили символически. Зимой котёл будет стараться, а счета — расти.", "warn");
+        }
+      },
+      {
+        name: "Пока без утепления, просто покрасить",
+        desc: "«Стены и так тёплые». Смотря какие и смотря где.",
+        cost: 60000, days: 5,
+        run() {
+          S.flags.facade = true;
+          if (S.flags.walls === "brick") { addQuality(-8); mistake("Кирпич в один слой без утепления — промерзающие стены."); log("Кирпич без утепления в нашем климате промерзает. Красиво, но холодно.", "bad"); }
+          else if (S.flags.walls === "frame") { addQuality(-15); mistake("Каркасник без утепления — это беседка, а не дом."); log("Каркасник без утеплителя? Внутри будет как снаружи, только без ветра.", "bad"); }
+          else { addQuality(-5); mistake("Сэкономили на утеплении — отопление будет золотым."); log("Оставили как есть. Жить можно, но зимние счета вас не обрадуют.", "warn"); }
+        }
+      }
+    ]
+  },
+
+  /* 9. Усадка сруба (условный) */
+  {
+    tag: "Технологическая пауза",
+    title: "Усадка сруба",
+    sub: "Брус естественной влажности садится 6–12 месяцев. Отделка до усадки — деньги на ветер.",
+    condition: () => S.flags.walls === "timber",
+    plotInfo: () => "Прораб напоминает: сруб ещё «играет». Начинать чистовую отделку сейчас — рискованно.",
+    options: () => [
+      {
+        name: "Выждать усадку (8 месяцев)",
+        desc: "Дом стоит под крышей и «отдыхает». Долго, но отделка потом ляжет намертво.",
+        cost: 30000, days: 240,
+        run() { addQuality(10); achieve("Дождались усадки сруба — отделку не порвёт."); log("Восемь месяцев терпения. Сруб сел, венцы уплотнились — теперь можно отделывать без страха.", "good"); }
+      },
+      {
+        name: "Отделывать сразу, на скользящих креплениях",
+        desc: "Компромисс: специальные направляющие компенсируют усадку. Дороже и нужны грамотные руки.",
+        cost: 90000, days: 10,
+        run() {
+          if (Math.random() < 0.35) { addQuality(-8); mistake("Скользящий крепёж смонтировали с ошибками — отделку повело при усадке."); log("Скользящие крепления сделали кое-как. Кое-где отделку всё-таки повело.", "bad"); }
+          else { addQuality(5); achieve("Скользящий крепёж отработал — усадка прошла незаметно для отделки."); log("Грамотный монтаж на скользящих креплениях. Сруб садится, отделка — на месте.", "good"); }
+        }
+      },
+      {
+        name: "Какая ещё усадка? Отделываем жёстко!",
+        desc: "Гипсокартон на жёсткий каркас, плитку на стены. Через полгода узнаете, зачем была нужна пауза.",
+        cost: 0, days: 2,
+        run() { addQuality(-15); S.flags.cracked = true; mistake("Жёсткая отделка по свежему срубу — усадка порвала гипсокартон и плитку."); log("Через несколько месяцев сруб сел на положенные сантиметры. Отделка пошла трещинами и волнами. Переделывать.", "bad"); }
+      }
+    ]
+  },
+
+  /* 10. Внутренняя отделка */
+  {
+    tag: "Этап 9 из 9",
+    title: "Внутренняя отделка",
+    sub: "Финишная прямая. Здесь экономия видна каждый день, а качество радует годами.",
+    plotInfo: () => "Осталось превратить стройку в дом: полы, стены, потолки, санузлы.",
+    options: () => [
+      {
+        name: "Полноценный ремонт «под ключ»",
+        desc: "Стяжка, штукатурка по маякам, чистовые материалы среднего класса.",
+        cost: 520000, days: 45,
+        run() { S.flags.finishDone = true; addQuality(10); log("Отделка завершена. Пахнет свежей краской и новосельем!", "good"); }
+      },
+      {
+        name: "Бюджетная отделка своими руками",
+        desc: "Дольше и попроще, зато душевно и заметно дешевле.",
+        cost: 260000, days: 70,
+        run() { S.flags.finishDone = true; addQuality(5); achieve("Отделали дом своими руками — есть чем гордиться."); log("Два месяца вечеров и выходных — и дом готов. Каждый угол сделан своими руками.", "good"); }
+      },
+      {
+        name: "«Жить можно и так» — черновой минимум",
+        desc: "Бетонные полы, голые стены. Зато быстро и почти бесплатно.",
+        cost: 80000, days: 10,
+        run() { S.flags.finishDone = true; addQuality(-6); mistake("Заехали в дом с черновой отделкой — ремонт растянется на годы."); log("Заехали «на бетон». Знакомые говорят, это на пару месяцев. Статистика говорит — на пять лет.", "warn"); }
+      }
+    ]
+  }
+];
+
+/* зимнее бетонирование */
+function winterConcreteCheck() {
+  if (isWinter()) {
+    const extra = 60000;
+    S.money -= extra;
+    addQuality(-4);
+    mistake("Бетонирование зимой — противоморозные добавки и прогрев (+" + fmtMoney(extra) + "), и всё равно риск.");
+    log("Зимнее бетонирование: пришлось доплатить " + fmtMoney(extra) + " за добавки и электропрогрев. Зимой бетон капризен.", "warn");
+  }
+}
+
+/* ---------- случайные события ---------- */
+
+function randomEvent() {
+  if (Math.random() > 0.4) return;
+  const f = S.flags;
+  const pool = [];
+  if (f.walls && !f.roof) pool.push(() => {
+    addQuality(-7); S.day += 6;
+    mistake("Коробку без крыши залило дождями — сушили и латали.");
+    const w = document.getElementById("weather-emoji");
+    w.style.display = ""; setTimeout(() => w.style.display = "none", 4000);
+    log("Зарядили дожди. Открытая коробка промокла насквозь — неделя на просушку.", "bad");
+  });
+  pool.push(() => {
+    S.priceMul = Math.round(S.priceMul * 1.1 * 100) / 100;
+    log("Плохие новости с рынка: стройматериалы подорожали на 10%. Дальше всё будет дороже.", "warn");
+  });
+  pool.push(() => {
+    S.day += 10;
+    log("Бригада уехала «на два дня» на другой объект. Вернулась через десять. Классика жанра.", "warn");
+  });
+  pool.push(() => {
+    S.money += 60000;
+    log("Сосед закончил стройку и отдал остатки материалов. Плюс 60 000 ₽ экономии — и повод для шашлыка.", "good");
+  });
+  if (pool.length) pool[Math.floor(Math.random() * pool.length)]();
+}
+
+/* ---------- рендер этапа ---------- */
+
+function currentStage() {
+  while (S.stageIdx < STAGES.length) {
+    const st = STAGES[S.stageIdx];
+    if (!st.condition || st.condition()) return st;
+    S.stageIdx++;
+  }
+  return null;
+}
+
+function renderStage() {
+  const card = document.getElementById("stage-card");
+  const st = currentStage();
+  if (!st) { renderFinal(); return; }
+
+  let html = '<span class="stage-tag">' + st.tag + '</span>'
+    + "<h2>" + st.title + "</h2>"
+    + '<p class="sub">' + st.sub + "</p>"
+    + '<div class="plot-info">' + st.plotInfo() + "</div>";
+
+  if (st.type === "multi") {
+    const opts = st.multiOptions();
+    html += opts.map((o, i) =>
+      '<label class="check-row" id="chk-row-' + i + '">'
+      + '<input type="checkbox" data-key="' + o.key + '" ' + (o.required ? "checked" : "") + ">"
+      + '<span><b>' + o.label + "</b><br><span style='color:var(--muted);font-size:12.5px'>💰 "
+      + fmtMoney(o.cost) + " · ⏱ " + fmtDays(o.days) + (o.required ? " · <i>без этого дом нежилой</i>" : "") + "</span></span></label>"
+    ).join("");
+    html += '<button class="btn" id="multi-done">Смонтировать выбранное</button>';
+    card.innerHTML = html;
+    for (const row of card.querySelectorAll(".check-row")) {
+      const input = row.querySelector("input");
+      const sync = () => row.classList.toggle("checked", input.checked);
+      input.addEventListener("change", sync); sync();
+    }
+    document.getElementById("multi-done").onclick = () => {
+      const selected = {};
+      let cost = 0, days = 0;
+      for (const input of card.querySelectorAll("input[type=checkbox]")) {
+        if (input.checked) {
+          selected[input.dataset.key] = true;
+          const o = opts.find(x => x.key === input.dataset.key);
+          cost += o.cost; days += o.days;
+        }
+      }
+      spend(cost, days);
+      st.runMulti(selected);
+      afterStage();
+    };
+    return;
+  }
+
+  const opts = st.options();
+  html += opts.map((o, i) => {
+    let extraHtml = "";
+    if (o.extra && o.extra.type === "check") {
+      extraHtml = '<div class="meta" onclick="event.stopPropagation()"><label><input type="checkbox" id="extra-' + i + '" checked style="accent-color:var(--accent)"> ' + o.extra.label + "</label></div>";
+    }
+    return '<button class="option" data-i="' + i + '">'
+      + '<span class="name">' + o.name + "</span>"
+      + '<span class="desc">' + o.desc + "</span>"
+      + '<span class="meta"><span>💰 ' + (o.cost ? fmtMoney(Math.round(o.cost * S.priceMul)) : "бесплатно") + "</span><span>⏱ " + fmtDays(o.days) + "</span></span>"
+      + extraHtml
+      + "</button>";
+  }).join("");
+  card.innerHTML = html;
+
+  for (const btn of card.querySelectorAll(".option")) {
+    btn.onclick = () => {
+      const o = opts[+btn.dataset.i];
+      const extras = {};
+      if (o.extra) {
+        const chk = document.getElementById("extra-" + btn.dataset.i);
+        extras[o.extra.key] = chk ? chk.checked : false;
+      }
+      spend(o.cost, o.days);
+      o.run(extras);
+      afterStage();
+    };
+  }
+}
+
+function afterStage() {
+  S.stageIdx++;
+  randomEvent();
+  paintHouse();
+  renderHud();
+  renderStage();
+}
+
+/* ---------- финал ---------- */
+
+function renderFinal() {
+  S.finished = true;
+  let q = Math.max(0, Math.min(100, S.quality));
+  let debtPenalty = 0;
+  if (S.money < 0) {
+    debtPenalty = Math.min(30, Math.ceil(-S.money / 60000));
+    q = Math.max(0, q - debtPenalty);
+    mistake("Стройка ушла в кредит на " + fmtMoney(-S.money) + " — проценты будут давить ещё годы (−" + debtPenalty + " к итогу).");
+  }
+  S.quality = q;
+  renderHud();
+
+  const years = (S.day / 360).toFixed(1);
+  let stars, verdict, tone;
+  if (q >= 85) { stars = "⭐⭐⭐⭐⭐"; verdict = "Дом мечты!"; tone = "Вы строили как профессионал: геология, технология, никаких «и так сойдёт». Такому дому — сто лет стоять."; }
+  else if (q >= 70) { stars = "⭐⭐⭐⭐"; verdict = "Отличный дом"; tone = "Пара шероховатостей, но в целом — добротный дом, в который приятно возвращаться."; }
+  else if (q >= 55) { stars = "⭐⭐⭐"; verdict = "Крепкий середнячок"; tone = "Жить можно, но некоторые решения ещё напомнят о себе счетами и мелким ремонтом."; }
+  else if (q >= 35) { stars = "⭐⭐"; verdict = "Проблемный самострой"; tone = "Дом стоит, но список переделок длиннее списка комнат. Экономия вышла дорогой."; }
+  else { stars = "⭐"; verdict = "Стройка-катастрофа"; tone = "Трещины, сырость и сквозняки. Иногда дешевле снести и начать заново — теперь вы знаете, как надо."; }
+
+  const card = document.getElementById("stage-card");
+  card.innerHTML = '<div class="final">'
+    + '<span class="stage-tag">Стройка завершена</span>'
+    + '<div class="stars">' + stars + "</div>"
+    + '<div class="verdict">' + verdict + "</div>"
+    + '<p class="sub">' + tone + "</p>"
+    + '<div class="plot-info" style="text-align:left">'
+    + "Качество дома: <b>" + q + " / 100</b><br>"
+    + "Стройка заняла: <b>" + fmtDays(S.day) + "</b> (~" + years + " г.)<br>"
+    + "Остаток бюджета: <b>" + (S.money >= 0 ? fmtMoney(S.money) : "долг " + fmtMoney(-S.money)) + "</b><br>"
+    + "Грунт на участке был: <b>" + SOILS[S.soil].name + "</b>, вода " + (S.highWater ? "высокая" : "низкая")
+    + "</div>"
+    + (S.achievements.length ? "<ul>" + S.achievements.map(a => "<li>✅ " + a + "</li>").join("") + "</ul>" : "")
+    + (S.mistakes.length ? '<ul class="mist">' + S.mistakes.map(m => "<li>⚠️ " + m + "</li>").join("") + "</ul>" : "<p class='sub'>Ни одной ошибки — снимаем каску в знак уважения!</p>")
+    + '<button class="btn" onclick="newGame()">Начать заново 🔄</button>'
+    + "</div>";
+  log("Стройка завершена! Итог: " + verdict.toLowerCase() + " (" + q + "/100).", q >= 70 ? "good" : q >= 45 ? "warn" : "bad");
+}
+
+/* ---------- старт ---------- */
+newGame();
+</script>
+</body>
+</html>
