@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Стройка: симулятор постройки дома</title>
+<title>Стройка: изометрический симулятор постройки дома</title>
 <style>
   :root {
-    --bg: #f2f4f8;
+    --bg: #14331f;
     --card: #ffffff;
     --ink: #1c2333;
     --muted: #5b6478;
@@ -14,884 +14,1369 @@
     --accent-dark: #1557bd;
     --good: #1a7f37;
     --bad: #c62828;
-    --warn: #b26a00;
     --line: #dde2ec;
     --radius: 14px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
-    background: var(--bg);
-    color: var(--ink);
-    min-height: 100vh;
-    padding: 16px;
+    background: radial-gradient(1200px 600px at 50% -100px, #2e5c38, var(--bg));
+    color: var(--ink); min-height: 100vh; padding: 14px;
   }
-  .wrap { max-width: 1060px; margin: 0 auto; }
-  header { text-align: center; margin-bottom: 16px; }
-  header h1 { font-size: 26px; }
-  header p { color: var(--muted); font-size: 14px; margin-top: 4px; }
+  .wrap { max-width: 1240px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 12px; color: #eaf4ec; }
+  header h1 { font-size: 24px; }
+  header p { opacity: .75; font-size: 13px; margin-top: 3px; }
 
   .hud {
-    display: flex; flex-wrap: wrap; gap: 10px;
-    background: var(--card); border: 1px solid var(--line);
-    border-radius: var(--radius); padding: 12px 14px; margin-bottom: 14px;
+    display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
   }
-  .hud .stat { flex: 1 1 130px; min-width: 120px; }
-  .hud .stat .label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
-  .hud .stat .value { font-size: 17px; font-weight: 700; margin-top: 2px; }
-  .hud .stat .value.neg { color: var(--bad); }
-
-  .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  @media (max-width: 820px) { .layout { grid-template-columns: 1fr; } }
-
-  .card {
-    background: var(--card); border: 1px solid var(--line);
-    border-radius: var(--radius); padding: 16px;
+  .hud .stat {
+    flex: 1 1 140px; min-width: 130px; background: var(--card);
+    border-radius: 12px; padding: 8px 12px; box-shadow: 0 2px 8px rgba(0,0,0,.25);
   }
-  .card h2 { font-size: 17px; margin-bottom: 4px; }
-  .card .sub { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  .hud .label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+  .hud .value { font-size: 15.5px; font-weight: 700; margin-top: 1px; white-space: nowrap; }
+  .hud .value.neg { color: var(--bad); }
+  .qbar { height: 7px; border-radius: 5px; background: #e8ecf4; overflow: hidden; margin-top: 5px; }
+  .qbar i { display: block; height: 100%; background: linear-gradient(90deg, #c62828, #f2a341 45%, #1a7f37); transition: width .4s; }
+  .jbar { height: 7px; border-radius: 5px; background: #e8ecf4; overflow: hidden; margin-top: 5px; }
+  .jbar i { display: block; height: 100%; background: var(--accent); transition: width .3s linear; }
 
-  .plot-info { font-size: 13.5px; line-height: 1.7; background: #f7f9fd; border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
-  .plot-info b { font-weight: 600; }
+  .layout { display: grid; grid-template-columns: minmax(0,1fr) 375px; gap: 12px; align-items: start; }
+  @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
 
-  .option {
-    display: block; width: 100%; text-align: left;
-    border: 1.5px solid var(--line); border-radius: 12px;
-    background: #fff; padding: 12px 14px; margin-bottom: 10px;
-    cursor: pointer; font: inherit; transition: border-color .15s, background .15s;
+  .scene-card { position: relative; border-radius: var(--radius); overflow: hidden; box-shadow: 0 6px 24px rgba(0,0,0,.35); background:#aad4f0; }
+  #scene { width: 100%; height: auto; display: block; }
+
+  #prompt {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+    background: #fff; border-radius: 12px; padding: 10px 14px; display: none;
+    box-shadow: 0 6px 20px rgba(0,0,0,.35); text-align: center; min-width: 260px; z-index: 5;
   }
-  .option:hover:not(:disabled) { border-color: var(--accent); background: #f4f8ff; }
-  .option:disabled { opacity: .5; cursor: not-allowed; }
-  .option .name { display: block; font-weight: 700; font-size: 15px; }
-  .option .desc { display: block; color: var(--muted); font-size: 13px; margin-top: 3px; line-height: 1.45; }
-  .option .meta { display: block; margin-top: 6px; font-size: 12.5px; color: var(--ink); }
-  .option .meta span { display: inline-block; margin-right: 12px; }
+  #prompt .pt { font-weight: 700; font-size: 14px; margin-bottom: 7px; }
+  #prompt .pbar { height: 5px; border-radius: 4px; background: #e8ecf4; margin-top: 8px; overflow: hidden; }
+  #prompt .pbar i { display: block; height: 100%; background: var(--bad); }
 
-  .check-row {
-    display: flex; align-items: flex-start; gap: 10px;
-    border: 1.5px solid var(--line); border-radius: 12px;
-    padding: 11px 13px; margin-bottom: 9px; cursor: pointer;
-  }
-  .check-row input { margin-top: 4px; width: 17px; height: 17px; accent-color: var(--accent); }
-  .check-row.checked { border-color: var(--accent); background: #f4f8ff; }
+  #toasts { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 4; pointer-events: none; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+  .toast { background: rgba(20,26,40,.88); color: #fff; font-size: 13px; padding: 7px 14px; border-radius: 20px; max-width: 90%; animation: tin .25s; }
+  .toast.good { background: rgba(21,87,44,.92); }
+  .toast.bad { background: rgba(150,28,28,.93); }
+  .toast.warn { background: rgba(146,92,9,.93); }
+  @keyframes tin { from { opacity: 0; transform: translateY(-8px); } }
 
-  .btn {
-    display: inline-block; border: none; border-radius: 10px;
-    background: var(--accent); color: #fff; font: inherit; font-weight: 700;
-    padding: 11px 22px; cursor: pointer;
+  .panel { background: var(--card); border-radius: var(--radius); padding: 14px; box-shadow: 0 6px 24px rgba(0,0,0,.3); }
+  .panel h2 { font-size: 16px; margin-bottom: 3px; }
+  .panel .sub { color: var(--muted); font-size: 12.5px; margin-bottom: 10px; line-height: 1.45; }
+  .stage-tag { display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--accent); background: #eaf1fe; border-radius: 6px; padding: 3px 8px; margin-bottom: 7px; }
+  .plot-info { font-size: 12.5px; line-height: 1.55; background: #f7f9fd; border: 1px dashed var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 10px; }
+
+  .mcard {
+    display: block; width: 100%; text-align: left; border: 1.5px solid var(--line);
+    border-radius: 12px; background: #fff; padding: 10px 12px; margin-bottom: 8px;
+    cursor: pointer; font: inherit; transition: border-color .15s, background .15s, transform .1s;
   }
+  .mcard:hover { border-color: var(--accent); background: #f4f8ff; transform: translateY(-1px); }
+  .mcard .row1 { display: flex; align-items: center; gap: 9px; }
+  .mcard .ic { font-size: 24px; width: 34px; text-align: center; flex-shrink: 0; }
+  .mcard .name { font-weight: 700; font-size: 14px; }
+  .mcard .desc { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; line-height: 1.4; }
+  .mcard .meta { display: flex; gap: 12px; margin-top: 6px; font-size: 12px; }
+  .mcard .meta b { font-weight: 600; }
+  .addon { margin-top: 7px; font-size: 12.5px; background: #f2f6ff; border-radius: 8px; padding: 6px 9px; }
+  .addon input { accent-color: var(--accent); }
+
+  .chk { display: flex; gap: 9px; align-items: flex-start; border: 1.5px solid var(--line); border-radius: 10px; padding: 9px 11px; margin-bottom: 7px; cursor: pointer; font-size: 13px; }
+  .chk input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--accent); }
+  .chk.on { border-color: var(--accent); background: #f4f8ff; }
+  .chk small { color: var(--muted); }
+
+  .btn { display: inline-block; border: none; border-radius: 10px; background: var(--accent); color: #fff; font: inherit; font-weight: 700; padding: 10px 18px; cursor: pointer; }
   .btn:hover { background: var(--accent-dark); }
-  .btn.secondary { background: #e8ecf4; color: var(--ink); }
+  .btn.warn { background: #b26a00; }
+  .btn.danger { background: var(--bad); }
+  .btn.ghost { background: #e8ecf4; color: var(--ink); }
+  .btn.sm { padding: 7px 12px; font-size: 13px; }
 
-  #scene { width: 100%; height: auto; display: block; border-radius: 10px; background: linear-gradient(#cfe8ff 0%, #e8f4ff 62%, #e8f4ff 100%); }
+  .jobbox { text-align: center; padding: 8px 0 2px; }
+  .jobbox .jl { font-weight: 700; font-size: 15px; }
+  .jobbox .jt { color: var(--muted); font-size: 12.5px; margin: 4px 0 8px; }
+  .jobbox .jbar { height: 10px; border-radius: 6px; }
+  .jobactions { margin-top: 10px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
 
-  .log { max-height: 260px; overflow-y: auto; font-size: 13px; }
-  .log .entry { padding: 7px 10px; border-radius: 8px; margin-bottom: 6px; background: #f7f9fd; line-height: 1.45; }
+  .logcard { margin-top: 12px; }
+  .log { max-height: 210px; overflow-y: auto; font-size: 12.5px; }
+  .log .entry { padding: 6px 9px; border-radius: 8px; margin-bottom: 5px; background: #f7f9fd; line-height: 1.4; }
   .log .entry.good { background: #eaf6ec; color: #14532d; }
   .log .entry.bad { background: #fdecea; color: #7f1d1d; }
   .log .entry.warn { background: #fff4e0; color: #7c4a03; }
-  .log .entry .day { font-weight: 700; opacity: .7; margin-right: 6px; }
+  .log .day { font-weight: 700; opacity: .65; margin-right: 5px; }
 
-  .quality-bar { height: 10px; border-radius: 6px; background: #e8ecf4; overflow: hidden; margin-top: 6px; }
-  .quality-bar i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, #c62828, #f2a341 45%, #1a7f37); transition: width .4s; }
+  #modal-back { position: fixed; inset: 0; background: rgba(10,16,26,.65); display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+  #modal { background: #fff; border-radius: 16px; max-width: 520px; width: 100%; max-height: 88vh; overflow-y: auto; padding: 22px; text-align: center; }
+  #modal .stars { font-size: 32px; letter-spacing: 4px; margin: 8px 0; }
+  #modal .verdict { font-size: 20px; font-weight: 800; margin-bottom: 6px; }
+  #modal ul { text-align: left; margin: 10px auto; font-size: 13px; line-height: 1.55; color: var(--muted); padding-left: 18px; }
+  #modal ul.mist li { color: var(--bad); }
 
-  .final { text-align: center; }
-  .final .stars { font-size: 34px; letter-spacing: 4px; margin: 10px 0; }
-  .final .verdict { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
-  .final ul { text-align: left; margin: 12px auto; max-width: 480px; font-size: 13.5px; line-height: 1.6; color: var(--muted); }
-  .final ul li { margin-bottom: 4px; }
-  .final .mist { color: var(--bad); }
-
-  .stage-tag { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--accent); background: #eaf1fe; border-radius: 6px; padding: 3px 8px; margin-bottom: 8px; }
-  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 18px; }
+  .footerbar { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; color: #cfe3d4; font-size: 12px; flex-wrap: wrap; gap: 8px; }
+  .footerbar button { font-size: 12px; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>🏠 Стройка: построй дом без ошибок</h1>
-    <p>Пошаговый симулятор загородного строительства. Учитывай грунт, сезон, технологию и бюджет — как в жизни.</p>
+    <h1>🏗️ Стройка: построй дом без ошибок</h1>
+    <p>Изометрический симулятор в реальном времени: выбирай материалы, следи за погодой и технологией. Прогресс сохраняется — можно уходить и возвращаться.</p>
   </header>
 
   <div class="hud">
-    <div class="stat"><div class="label">Бюджет</div><div class="value" id="hud-money">—</div></div>
-    <div class="stat"><div class="label">День стройки</div><div class="value" id="hud-day">—</div></div>
-    <div class="stat"><div class="label">Сезон</div><div class="value" id="hud-season">—</div></div>
-    <div class="stat">
-      <div class="label">Качество дома</div>
-      <div class="value" id="hud-quality">—</div>
-      <div class="quality-bar"><i id="quality-fill" style="width:50%"></i></div>
-    </div>
+    <div class="stat"><div class="label">Бюджет</div><div class="value" id="h-money">—</div></div>
+    <div class="stat"><div class="label">День · Сезон</div><div class="value" id="h-day">—</div></div>
+    <div class="stat"><div class="label">Качество</div><div class="value" id="h-q">—</div><div class="qbar"><i id="h-qf"></i></div></div>
+    <div class="stat" style="flex:2 1 220px"><div class="label">Сейчас на площадке</div><div class="value" id="h-act" style="font-size:13.5px">—</div><div class="jbar"><i id="h-actf" style="width:0%"></i></div></div>
   </div>
 
   <div class="layout">
     <div>
-      <div class="card" id="stage-card">
-        <!-- заполняется скриптом -->
+      <div class="scene-card">
+        <canvas id="scene" width="960" height="620"></canvas>
+        <div id="toasts"></div>
+        <div id="prompt">
+          <div class="pt" id="prompt-title"></div>
+          <button class="btn sm" id="prompt-btn"></button>
+          <div class="pbar"><i id="prompt-bar" style="width:100%"></i></div>
+        </div>
+      </div>
+      <div class="footerbar">
+        <span>Игра работает офлайн и хранит прогресс только в вашем браузере.</span>
+        <button class="btn ghost sm" id="reset-btn">🔄 Начать новую стройку</button>
       </div>
     </div>
     <div>
-      <div class="card" style="margin-bottom:14px;">
-        <h2>Ваш дом</h2>
-        <svg id="scene" viewBox="0 0 400 260" role="img" aria-label="Схема строящегося дома">
-          <!-- солнце / погода -->
-          <circle id="sun" cx="352" cy="40" r="20" fill="#ffd54d"/>
-          <text id="weather-emoji" x="330" y="52" font-size="30" style="display:none">🌧️</text>
-          <!-- земля -->
-          <rect x="0" y="200" width="400" height="60" fill="#8bbf6a"/>
-          <rect id="soil-cut" x="0" y="216" width="400" height="44" fill="#a97c50"/>
-          <!-- дерево -->
-          <rect x="30" y="168" width="8" height="34" fill="#7a5230"/>
-          <circle cx="34" cy="158" r="20" fill="#5f9e4a"/>
-          <!-- слои дома -->
-          <g id="lay-survey" style="display:none">
-            <rect x="120" y="196" width="180" height="4" fill="#e2544a"/>
-            <line x1="120" y1="188" x2="120" y2="204" stroke="#e2544a" stroke-width="2"/>
-            <line x1="300" y1="188" x2="300" y2="204" stroke="#e2544a" stroke-width="2"/>
-          </g>
-          <g id="lay-foundation" style="display:none">
-            <rect id="found-shape" x="118" y="188" width="184" height="14" fill="#9aa3b2" stroke="#6b7382"/>
-          </g>
-          <g id="lay-walls" style="display:none">
-            <rect id="walls-shape" x="124" y="118" width="172" height="72" fill="#e6d3b3" stroke="#b39b73"/>
-          </g>
-          <g id="lay-roof" style="display:none">
-            <polygon id="roof-shape" points="112,120 210,64 308,120" fill="#b0413e" stroke="#7d2d2b"/>
-          </g>
-          <g id="lay-windows" style="display:none">
-            <rect x="142" y="136" width="30" height="30" fill="#bfe3ff" stroke="#5b7d99"/>
-            <rect x="248" y="136" width="30" height="30" fill="#bfe3ff" stroke="#5b7d99"/>
-            <rect x="196" y="140" width="28" height="50" fill="#8a5a33" stroke="#5f3d20"/>
-            <circle cx="219" cy="166" r="2.4" fill="#e8c069"/>
-          </g>
-          <g id="lay-engineering" style="display:none">
-            <rect x="268" y="72" width="14" height="34" fill="#8d6a4c" stroke="#5f4630"/>
-            <path id="smoke" d="M275 68 q -6 -8 2 -14 q 8 -6 2 -14" fill="none" stroke="#c9d2df" stroke-width="4" stroke-linecap="round"/>
-          </g>
-          <g id="lay-facade" style="display:none">
-            <rect id="facade-shape" x="124" y="118" width="172" height="72" fill="#f5e9d0" stroke="#c9b48a" opacity="0.95"/>
-            <rect x="142" y="136" width="30" height="30" fill="#bfe3ff" stroke="#5b7d99"/>
-            <rect x="248" y="136" width="30" height="30" fill="#bfe3ff" stroke="#5b7d99"/>
-            <rect x="196" y="140" width="28" height="50" fill="#8a5a33" stroke="#5f3d20"/>
-            <circle cx="219" cy="166" r="2.4" fill="#e8c069"/>
-          </g>
-          <g id="lay-finish" style="display:none">
-            <rect x="150" y="196" width="120" height="4" fill="#d9c49a"/>
-            <circle cx="330" cy="192" r="10" fill="#d9646a"/>
-            <rect x="328" y="192" width="4" height="12" fill="#4c7a3f"/>
-          </g>
-          <g id="cracks" style="display:none">
-            <path d="M150 190 l 6 -14 l -4 -10 l 7 -12" fill="none" stroke="#7a6a4f" stroke-width="1.6"/>
-            <path d="M262 190 l -5 -16 l 6 -9" fill="none" stroke="#7a6a4f" stroke-width="1.6"/>
-          </g>
-        </svg>
-      </div>
-      <div class="card">
-        <h2>Журнал стройки</h2>
+      <div class="panel" id="panel"></div>
+      <div class="panel logcard">
+        <h2 style="font-size:14px;margin-bottom:8px">📋 Журнал стройки</h2>
         <div class="log" id="log"></div>
       </div>
     </div>
   </div>
-
-  <footer>Игра работает целиком в браузере, ничего не отправляет и не сохраняет. Обновите страницу или нажмите «Начать заново», чтобы сыграть ещё раз — участок каждый раз новый.</footer>
 </div>
+
+<div id="modal-back"><div id="modal"></div></div>
 
 <script>
 "use strict";
 
-/* ---------- справочники ---------- */
+/* ================= базовые константы ================= */
 
+const QS = new URLSearchParams(location.search);
+const SPEED = Math.max(1, +QS.get("speed") || 1);      // ?speed=N — ускорение (для отладки)
+const MIN = 60000 / SPEED;                              // «реальная минута» игры
+const DAY = MIN / 3;                                    // 3 игровых дня за минуту
+const SAVE_KEY = "stroikaIso1" + (SPEED > 1 ? "_dbg" : "");
 const SEASONS = ["Весна 🌱", "Лето ☀️", "Осень 🍂", "Зима ❄️"];
-const DAYS_PER_SEASON = 90;
-
 const SOILS = {
-  sand:  { name: "песок",     desc: "надёжное основание, вода уходит быстро" },
-  loam:  { name: "суглинок",  desc: "типичный грунт средней полосы, умеренное пучение" },
-  clay:  { name: "глина",     desc: "сильное морозное пучение, плохо отводит воду" },
-  peat:  { name: "торфяник",  desc: "слабый сжимаемый грунт — обычный фундамент «поплывёт»" }
+  sand: { name: "песок", desc: "надёжное основание, вода уходит быстро" },
+  loam: { name: "суглинок", desc: "типичный грунт, умеренное пучение" },
+  clay: { name: "глина", desc: "сильное морозное пучение" },
+  peat: { name: "торфяник", desc: "слабый грунт — обычный фундамент «поплывёт»" }
 };
 
 const fmtMoney = n => n.toLocaleString("ru-RU") + " ₽";
-const fmtDays = n => {
-  const m10 = n % 10, m100 = n % 100;
-  const w = (m10 === 1 && m100 !== 11) ? "день" : (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) ? "дня" : "дней";
-  return n + " " + w;
+function fmtMin(ms) {
+  const m = ms / MIN;
+  if (m < 1) return Math.max(5, Math.round(ms / 1000 / 5) * 5) / 1 + " сек";
+  return "≈" + Math.ceil(m) + " мин";
+}
+
+/* ================= каталоги материалов ================= */
+
+const CAT = {
+  survey: [
+    { id: "geo", ic: "🧪", name: "Геология + проект", cost: 180000, mins: 1,
+      desc: "Бурение скважин покажет грунт и воду, проект подберёт конструктив. Единственный способ строить не вслепую." },
+    { id: "typical", ic: "📄", name: "Типовой проект", cost: 40000, mins: 0.4,
+      desc: "Готовые чертежи из интернета. Красиво, но про ваш грунт проект ничего не знает." },
+    { id: "none", ic: "🤷", name: "Без проекта", cost: 0, mins: 0.15,
+      desc: "«Сосед строил без бумажек — и я смогу». Бесплатно. Рискованно." }
+  ],
+  foundation: [
+    { id: "slab", ic: "⬜", name: "Монолитная плита", cost: 750000, mins: 3, dig: true, concrete: true,
+      desc: "«Плавающий» фундамент, работает почти на любом грунте. Сразу готовый черновой пол. Дорого." },
+    { id: "strip", ic: "🧱", name: "Лента заглублённая", cost: 520000, mins: 2.5, dig: true, concrete: true,
+      desc: "Классика ниже глубины промерзания. Надёжна на большинстве грунтов, но не на торфе." },
+    { id: "shallow", ic: "➖", name: "Лента МЗЛФ", cost: 320000, mins: 2, dig: true, concrete: true,
+      desc: "Экономия: глубина 40–60 см. Хороша на песке, опасна на пучинистых и слабых грунтах." },
+    { id: "piles", ic: "🔩", name: "Винтовые сваи", cost: 260000, mins: 1, dig: false, concrete: false,
+      desc: "Без бетона и ожидания, отлично для слабых и мокрых грунтов. Минус — холодный цоколь." }
+  ],
+  walls: [
+    { id: "brick", ic: "🧱", name: "Кирпич", cost: 1150000, mins: 6,
+      desc: "Тепло­ёмкий, прочный, не горит. Дорого и долго — зато на века." },
+    { id: "gasblock", ic: "⬜", name: "Газобетон", cost: 780000, mins: 3.5,
+      desc: "Тёплый и быстрый. Хрупкий на изгиб: под перекрытия и крышу нужен армопояс.",
+      addon: { key: "armo", label: "Залить армопояс (+70 000 ₽)", cost: 70000, def: true } },
+    { id: "timber", ic: "🪵", name: "Брус", cost: 690000, mins: 3,
+      desc: "Дышащий и красивый. Даёт усадку до года — отделку придётся отложить или хитрить." },
+    { id: "frame", ic: "🔨", name: "Каркасник", cost: 560000, mins: 2.5,
+      desc: "Быстро и недорого. Всё качество — в утеплителе и плёнках, ошибки прячутся внутри стены." }
+  ],
+  roof: [
+    { id: "metal", ic: "🏠", name: "Металлочерепица", cost: 420000, mins: 2.5,
+      desc: "Полный пирог: гидроизоляция, обрешётка, вентзазор. Служит 30–50 лет." },
+    { id: "soft", ic: "🟩", name: "Гибкая черепица", cost: 470000, mins: 3,
+      desc: "Тихая и красивая. Требует сплошного основания — чуть дороже и дольше." },
+    { id: "temp", ic: "🩹", name: "Времянка из рубероида", cost: 90000, mins: 1,
+      desc: "«Перезимуем, потом переделаем». Дёшево, но каждый ветер — лотерея." }
+  ],
+  windows: [
+    { id: "gost", ic: "🪟", name: "Окна по ГОСТ", cost: 280000, mins: 1.5,
+      desc: "Двухкамерные пакеты, монтажные ленты, тёплый порог. В срубе — с обсадой (+60 000 ₽)." },
+    { id: "cheap", ic: "🕳️", name: "Эконом «на пену»", cost: 150000, mins: 1,
+      desc: "Однокамерные, без лент. Пена без защиты разрушается за пару лет, у окон будет дуть." }
+  ],
+  facade: [
+    { id: "full", ic: "🧥", name: "Утепление по расчёту + вентфасад", cost: 380000, mins: 3,
+      desc: "Минвата нужной толщины, ветрозащита, вентзазор. Тёплый дом и низкие счета." },
+    { id: "thin", ic: "🩳", name: "50 мм пенопласта «как у всех»", cost: 190000, mins: 2,
+      desc: "Дёшево, но мало. На дышащих стенах пенопласт запирает влагу в конструкции." },
+    { id: "paint", ic: "🎨", name: "Просто покрасить", cost: 60000, mins: 1,
+      desc: "«Стены и так тёплые». Смотря какие и смотря где." }
+  ],
+  finish: [
+    { id: "full", ic: "✨", name: "Ремонт «под ключ»", cost: 520000, mins: 4,
+      desc: "Стяжка, штукатурка по маякам, чистовые материалы. Заезжай и живи." },
+    { id: "diy", ic: "🛠️", name: "Своими руками", cost: 260000, mins: 6,
+      desc: "Дольше и попроще, зато душевно и дешевле." },
+    { id: "rough", ic: "🪣", name: "Черновой минимум", cost: 80000, mins: 1,
+      desc: "Бетонные полы, голые стены. «Доделаем потом» (нет)." }
+  ],
+  shrink: [
+    { id: "wait", ic: "⏳", name: "Выждать усадку", cost: 30000, mins: 30,
+      desc: "Сруб «отдыхает» под крышей. Долго, но отделка потом ляжет намертво." },
+    { id: "skid", ic: "🛷", name: "Скользящий крепёж", cost: 90000, mins: 0.5,
+      desc: "Направляющие компенсируют усадку. Дороже и нужны грамотные руки — небольшой риск." },
+    { id: "rigid", ic: "💪", name: "Жёстко и сразу", cost: 0, mins: 0.2,
+      desc: "Гипсокартон на жёсткий каркас по свежему срубу. Через полгода узнаете, зачем была пауза." }
+  ],
+  eng: [
+    { key: "electric", label: "Электрика: щит, медь, УЗО", cost: 180000, req: true },
+    { key: "water", label: "Вода и канализация (скважина + септик)", cost: 260000, req: true },
+    { key: "heating", label: "Отопление: котёл и радиаторы", cost: 320000, req: true },
+    { key: "ventilation", label: "Вентиляция: клапаны + вытяжные каналы", cost: 90000, req: false, hint: "про неё чаще всего забывают" },
+    { key: "warmfloor", label: "Тёплый пол в санузлах (комфорт)", cost: 110000, req: false }
+  ]
 };
 
-/* ---------- состояние ---------- */
+const STAGE_NUM = {
+  chooseSurvey: "Этап 1 из 9 · Изыскания", surveyJob: "Этап 1 из 9 · Изыскания",
+  chooseFoundation: "Этап 2 из 9 · Фундамент", dig: "Этап 2 из 9 · Фундамент", pour: "Этап 2 из 9 · Фундамент", cure: "Этап 2 из 9 · Фундамент",
+  chooseWalls: "Этап 3 из 9 · Стены", walls: "Этап 3 из 9 · Стены",
+  chooseRoof: "Этап 4 из 9 · Крыша", roof: "Этап 4 из 9 · Крыша",
+  chooseWindows: "Этап 5 из 9 · Окна", windows: "Этап 5 из 9 · Окна",
+  chooseEng: "Этап 6 из 9 · Инженерка", eng: "Этап 6 из 9 · Инженерка",
+  chooseFacade: "Этап 7 из 9 · Фасад", facade: "Этап 7 из 9 · Фасад",
+  shrinkChoice: "Этап 8 из 9 · Усадка", shrinkWait: "Этап 8 из 9 · Усадка", skid: "Этап 8 из 9 · Усадка", rigid: "Этап 8 из 9 · Усадка",
+  chooseFinish: "Этап 9 из 9 · Отделка", finish: "Этап 9 из 9 · Отделка",
+  done: "Стройка завершена"
+};
 
-let S = null;
+/* ================= состояние ================= */
 
-function newGame() {
-  const soilKeys = Object.keys(SOILS);
-  S = {
-    money: 4200000,
-    day: 1,
+let state = null;
+let awayList = [];
+let loading = false;
+
+function freshState() {
+  const keys = Object.keys(SOILS);
+  return {
+    v: 1, created: Date.now(), lastSeen: Date.now(),
+    money: 4200000, quality: 50,
+    soil: keys[Math.floor(Math.random() * keys.length)],
+    highWater: Math.random() < 0.45, soilKnown: false,
     startSeason: Math.floor(Math.random() * 4),
-    quality: 50,
-    soil: soilKeys[Math.floor(Math.random() * soilKeys.length)],
-    highWater: Math.random() < 0.45,
-    soilKnown: false,
-    flags: {},          // concrete, timber, frame, gasblock, brick, tempRoof, ventilation, heating, ...
-    priceMul: 1,        // множитель после «подорожания»
-    mistakes: [],
-    achievements: [],
-    stageIdx: 0,
-    finished: false
+    phase: "chooseSurvey", job: null,
+    choices: {}, flags: {}, mistakes: [], wins: [], log: [],
+    nextRain: Date.now() + (2 + Math.random() * 2) * MIN,
+    rainUntil: 0, prompt: null, nextHeat: 0
   };
-  document.getElementById("log").innerHTML = "";
-  for (const g of document.querySelectorAll("#scene g[id^='lay-'], #cracks")) g.style.display = "none";
-  document.getElementById("weather-emoji").style.display = "none";
-  log("Вы купили участок 10 соток и решили построить дом. Бюджет — " + fmtMoney(S.money) + ". Удачи!", "");
-  renderStage();
-  renderHud();
 }
 
-/* ---------- сезон и погода ---------- */
+function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) {} }
+function load() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    return s && s.v === 1 ? s : null;
+  } catch (e) { return null; }
+}
 
-function seasonIdx() { return (S.startSeason + Math.floor((S.day - 1) / DAYS_PER_SEASON)) % 4; }
+/* ================= время и сезоны ================= */
+
+function day() { return 1 + Math.floor((Date.now() - state.created) / DAY); }
+function seasonIdx() { return (state.startSeason + Math.floor((day() - 1) / 30)) % 4; }
 function isWinter() { return seasonIdx() === 3; }
+function isSummer() { return seasonIdx() === 1; }
 function isAutumn() { return seasonIdx() === 2; }
 
-/* ---------- журнал и HUD ---------- */
+/* ================= журнал и тосты ================= */
 
 function log(text, cls) {
+  state.log.push({ d: day(), t: text, c: cls || "" });
+  if (state.log.length > 80) state.log.shift();
+  renderLog();
+  if (!loading) toast(text, cls);
+}
+function toast(text, cls) {
+  const box = document.getElementById("toasts");
   const el = document.createElement("div");
-  el.className = "entry" + (cls ? " " + cls : "");
-  el.innerHTML = '<span class="day">День ' + S.day + ".</span> " + text;
-  const box = document.getElementById("log");
-  box.prepend(el);
+  el.className = "toast " + (cls || "");
+  el.textContent = text.replace(/<[^>]+>/g, "");
+  box.appendChild(el);
+  setTimeout(() => { el.style.opacity = "0"; el.style.transition = "opacity .4s"; }, 4200);
+  setTimeout(() => el.remove(), 4700);
+  while (box.children.length > 3) box.firstChild.remove();
+}
+function renderLog() {
+  document.getElementById("log").innerHTML = state.log.slice().reverse().map(e =>
+    '<div class="entry ' + e.c + '"><span class="day">Д' + e.d + ".</span>" + e.t + "</div>").join("");
 }
 
-function renderHud() {
-  const m = document.getElementById("hud-money");
-  m.textContent = fmtMoney(S.money);
-  m.classList.toggle("neg", S.money < 0);
-  document.getElementById("hud-day").textContent = S.day;
-  document.getElementById("hud-season").textContent = SEASONS[seasonIdx()];
-  const q = Math.max(0, Math.min(100, S.quality));
-  document.getElementById("hud-quality").textContent = q + " / 100";
-  document.getElementById("quality-fill").style.width = q + "%";
+function addQ(d) { state.quality += d; }
+function mistake(t) { state.mistakes.push(t); }
+function win(t) { state.wins.push(t); }
+function spend(cost) {
+  state.money -= cost;
+  if (state.money < 0 && cost > 0) log("Денег не хватило — взяли " + fmtMoney(-state.money) + " в кредит.", "warn");
 }
 
-function spend(cost, days) {
-  const real = Math.round(cost * S.priceMul);
-  S.money -= real;
-  S.day += days;
-  if (S.money < 0 && cost > 0) {
-    log("Денег не хватило — пришлось взять " + fmtMoney(-S.money) + " в кредит. Проценты съедят часть качества жизни в новом доме.", "warn");
-  }
-  return real;
+/* ================= работы (jobs) ================= */
+
+function startJob(kind, label, mins, meta) {
+  state.job = { kind, label, start: Date.now(), end: Date.now() + mins * MIN, meta: meta || {} };
+  state.phase = kind;
+  save(); renderPanel();
+}
+function jobProgress() {
+  const j = state.job;
+  if (!j) return 0;
+  return Math.min(1, (Date.now() - j.start) / (j.end - j.start));
 }
 
-function addQuality(d) { S.quality += d; }
-function mistake(text) { S.mistakes.push(text); }
-function achieve(text) { S.achievements.push(text); }
+function completeJob() {
+  const j = state.job;
+  state.job = null;
+  if (loading) awayList.push(j.label);
+  const F = state.flags, C = state.choices;
 
-/* ---------- визуализация ---------- */
-
-function showLayer(id) { const el = document.getElementById(id); if (el) el.style.display = ""; }
-
-function paintHouse() {
-  const f = S.flags;
-  if (f.foundation) {
-    showLayer("lay-foundation");
-    const shape = document.getElementById("found-shape");
-    if (f.foundation === "piles") { shape.setAttribute("fill", "#7d8794"); shape.setAttribute("y", "182"); shape.setAttribute("height", "20"); }
-    if (f.foundation === "slab") { shape.setAttribute("height", "18"); shape.setAttribute("y", "184"); }
-  }
-  if (f.walls) {
-    showLayer("lay-walls");
-    const w = document.getElementById("walls-shape");
-    const colors = { brick: "#c96f4e", gasblock: "#e8e8e2", timber: "#c99a5b", frame: "#d8cba8" };
-    w.setAttribute("fill", colors[f.walls] || "#e6d3b3");
-  }
-  if (f.roof) {
-    showLayer("lay-roof");
-    const r = document.getElementById("roof-shape");
-    if (f.roof === "temp") r.setAttribute("fill", "#4a4f57");
-    if (f.roof === "soft") r.setAttribute("fill", "#5d7a4f");
-  }
-  if (f.windows) showLayer("lay-windows");
-  if (f.engineering) showLayer("lay-engineering");
-  if (f.facade) showLayer("lay-facade");
-  if (f.finishDone) showLayer("lay-finish");
-  if (f.cracked) showLayer("cracks");
-}
-
-/* ---------- этапы ---------- */
-
-const STAGES = [
-
-  /* 1. Изыскания и проект */
-  {
-    tag: "Этап 1 из 9",
-    title: "Изыскания и проект",
-    sub: "С чего начинается любая стройка? Правильно — с бумажек. Или нет?",
-    plotInfo: () => "Участок: 10 соток, подъезд есть, электричество по границе.<br>Грунт: <b>неизвестен</b> — без изысканий можно только гадать.",
-    options: () => [
-      {
-        name: "Геология + индивидуальный проект",
-        desc: "Бурение скважин покажет грунт и уровень воды. Проектировщик подберёт фундамент и конструктив под ваши условия.",
-        cost: 180000, days: 30,
-        run() {
-          S.soilKnown = true; S.flags.project = "full"; addQuality(10);
-          achieve("Провели геологию — фундамент выбирали не вслепую.");
-          log("Геологи пробурили скважины: грунт — <b>" + SOILS[S.soil].name + "</b> (" + SOILS[S.soil].desc + "), грунтовые воды " + (S.highWater ? "<b>высокие</b> — весной участок подтапливает" : "низкие") + ". Проект готов.", "good");
-        }
-      },
-      {
-        name: "Типовой проект из интернета",
-        desc: "Красивая картинка и готовые чертежи. Но проект ничего не знает про ваш грунт.",
-        cost: 40000, days: 10,
-        run() {
-          S.flags.project = "typical"; addQuality(2);
-          log("Скачали типовой проект. Что под ногами — по-прежнему загадка: фундамент придётся выбирать наугад.", "warn");
-        }
-      },
-      {
-        name: "«Сосед строил без проекта — и я смогу»",
-        desc: "Бесплатно и быстро. Что может пойти не так?",
-        cost: 0, days: 1,
-        run() {
-          S.flags.project = "none"; addQuality(-8);
-          mistake("Строили без проекта — размеры и узлы додумывали по ходу дела.");
-          log("Решили строить «по месту». Бригады такое любят: можно списать на «так в проекте было»... которого нет.", "bad");
-        }
-      }
-    ]
-  },
-
-  /* 2. Фундамент */
-  {
-    tag: "Этап 2 из 9",
-    title: "Фундамент",
-    sub: "Единственная часть дома, которую нельзя переделать. Выбирайте под грунт, а не под кошелёк.",
-    plotInfo: () => S.soilKnown
-      ? "По геологии: грунт — <b>" + SOILS[S.soil].name + "</b>, вода " + (S.highWater ? "<b>высокая</b>" : "низкая") + "."
-      : "Грунт <b>неизвестен</b>. Придётся полагаться на удачу.",
-    options: () => [
-      {
-        name: "Монолитная плита",
-        desc: "«Плавающий» фундамент — работает почти на любом грунте, сразу готовый черновой пол. Дорого.",
-        cost: 750000, days: 20,
-        run() {
-          S.flags.foundation = "slab"; S.flags.concrete = true; addQuality(12);
-          winterConcreteCheck();
-          log("Залили монолитную плиту. Дорого, зато спокойно: плита распределяет нагрузку и не боится слабых грунтов.", "good");
-        }
-      },
-      {
-        name: "Ленточный заглублённый",
-        desc: "Классика: лента ниже глубины промерзания. Надёжен на большинстве грунтов, но не на торфе.",
-        cost: 520000, days: 24,
-        run() {
-          S.flags.foundation = "strip"; S.flags.concrete = true;
-          winterConcreteCheck();
-          if (S.soil === "peat") {
-            addQuality(-25); S.flags.badFoundation = true;
-            mistake("Ленточный фундамент на торфянике — основание слабое, дом даст неравномерную осадку.");
-            log("Лента залита... но под ней торф. Слабый грунт сжимается неравномерно — жди перекосов и трещин.", "bad");
-          } else {
-            addQuality(10);
-            if (S.highWater) { addQuality(-6); log("Лента готова, но грунтовые воды высокие — без дренажа и гидроизоляции подвал будет сырым.", "warn"); mistake("Высокие грунтовые воды: заглублённой ленте нужен был дренаж."); }
-            else log("Заглублённая лента залита ниже глубины промерзания. Морозное пучение ей не страшно.", "good");
-          }
-        }
-      },
-      {
-        name: "Мелкозаглублённая лента (МЗЛФ)",
-        desc: "Экономвариант: лента глубиной 40–60 см. Хорош на песке, опасен на пучинистых и слабых грунтах.",
-        cost: 320000, days: 14,
-        run() {
-          S.flags.foundation = "shallow"; S.flags.concrete = true;
-          winterConcreteCheck();
-          if (S.soil === "peat") {
-            addQuality(-30); S.flags.badFoundation = true;
-            mistake("МЗЛФ на торфянике — фундамент «поплыл» вместе с домом.");
-            log("Сэкономили... МЗЛФ на торфе — почти гарантированные просадки. Стройка превращается в лотерею.", "bad");
-          } else if (S.soil === "clay" || (S.soil === "loam" && S.highWater)) {
-            addQuality(-18); S.flags.badFoundation = true;
-            mistake("МЗЛФ на пучинистом грунте без утепления отмостки — зимой ленту будет «гулять».");
-            log("На " + SOILS[S.soil].name + "е с " + (S.highWater ? "высокой водой " : "") + "морозное пучение будет поднимать мелкую ленту каждую зиму.", "bad");
-          } else {
-            addQuality(7);
-            log("На " + SOILS[S.soil].name + "е мелкозаглублённая лента — разумная экономия. Главное — утеплённая отмостка.", "good");
-          }
-        }
-      },
-      {
-        name: "Винтовые сваи",
-        desc: "Быстро, без бетона, отлично для слабых и мокрых грунтов. Минус — холодный продуваемый цоколь.",
-        cost: 260000, days: 5,
-        run() {
-          S.flags.foundation = "piles"; addQuality(6);
-          if (S.soil === "peat" || S.highWater) { addQuality(6); achieve("Сваи на слабом/мокром грунте — грамотное решение."); log("Сваи закрутили за несколько дней до плотного слоя. Для " + SOILS[S.soil].name + "а — отличный выбор.", "good"); }
-          else log("Сваи стоят. Работает, но не забудьте утеплить пол и закрыть цоколь — иначе снизу будет дуть.", "");
-        }
-      }
-    ]
-  },
-
-  /* 3. Выдержка бетона (условный) */
-  {
-    tag: "Технологическая пауза",
-    title: "Бетон набирает прочность",
-    sub: "Бетон достигает марочной прочности за 28 суток. Нагружать раньше — рисковать трещинами.",
-    condition: () => !!S.flags.concrete,
-    plotInfo: () => "Фундамент залит. Прораб спрашивает: ждём или начинаем класть стены?",
-    options: () => [
-      {
-        name: "Выдержать 28 суток, ухаживать за бетоном",
-        desc: "Поливать и укрывать плёнкой в жару, чтобы не пересох. Скучно, зато по технологии.",
-        cost: 5000, days: 28,
-        run() { addQuality(8); achieve("Дали бетону набрать прочность — по учебнику."); log("Месяц ухаживали за бетоном. Фундамент набрал марочную прочность — можно нагружать.", "good"); }
-      },
-      {
-        name: "Подождать неделю и начать",
-        desc: "70% прочности бетон набирает примерно за неделю. Строители часто так делают. Небольшой риск.",
-        cost: 0, days: 7,
-        run() {
-          if (Math.random() < 0.3) { addQuality(-6); mistake("Нагрузили недозревший бетон — по цоколю пошли волосяные трещины."); log("Начали кладку через неделю. По цоколю пошли мелкие трещины — бетон ещё «дышал».", "bad"); }
-          else { addQuality(2); log("Рискнули и начали через неделю. В этот раз пронесло — бетон успел схватиться достаточно.", ""); }
-        }
-      },
-      {
-        name: "Строить сразу — время не ждёт!",
-        desc: "Каждый день простоя — деньги. Бетон? Какой бетон?",
-        cost: 0, days: 1,
-        run() { addQuality(-12); S.flags.cracked = true; mistake("Начали кладку по свежему бетону — фундамент получил трещины под нагрузкой."); log("Кладка по двухдневному бетону... Фундамент треснул под весом первых рядов. Больно смотреть.", "bad"); }
-      }
-    ]
-  },
-
-  /* 4. Стены */
-  {
-    tag: "Этап 3 из 9",
-    title: "Коробка: из чего строим стены",
-    sub: "У каждого материала свои нюансы: усадка, армопояс, паробарьер. Дьявол — в деталях.",
-    plotInfo: () => "Фундамент готов. Пора выбирать материал стен — от него зависят и сроки, и дальнейшие этапы.",
-    options: () => [
-      {
-        name: "Кирпич",
-        desc: "Вечная классика: тепло­ёмкий, прочный, не горит. Дорого и долго, каменщики на вес золота.",
-        cost: 1150000, days: 60,
-        run() { S.flags.walls = "brick"; addQuality(12); log("Кирпичная коробка растёт два месяца, но выглядит на века. Соседи завидуют.", "good"); }
-      },
-      {
-        name: "Газобетон",
-        desc: "Тёплый, ровный, быстро кладётся. Нюанс: хрупкий на изгиб — обязателен армопояс под перекрытия и крышу.",
-        cost: 780000, days: 35,
-        extra: { type: "check", label: "Залить армопояс (+70 000 ₽, +6 дней)", key: "armopoyas" },
-        run(extras) {
-          S.flags.walls = "gasblock";
-          if (extras.armopoyas) { spend(70000, 6); addQuality(12); achieve("Армопояс по газобетону — трещин от точечных нагрузок не будет."); log("Газобетонная коробка с монолитным армопоясом. Перекрытия и мауэрлат лягут на бетон, а не на хрупкий блок.", "good"); }
-          else { addQuality(-10); S.flags.cracked = true; mistake("Газобетон без армопояса — балки продавили блоки, по стенам пошли трещины."); log("Сэкономили на армопоясе. Балки перекрытия точечно давят на газобетон — над проёмами появились трещины.", "bad"); }
-        }
-      },
-      {
-        name: "Брус естественной влажности",
-        desc: "Дышащий, красивый, недорогой. Главный нюанс: даёт усадку до 5–8 см — отделку придётся отложить.",
-        cost: 690000, days: 30,
-        run() { S.flags.walls = "timber"; addQuality(8); log("Сруб собран. Помните: брус будет усыхать и садиться примерно год. Окна — на обсадах, отделка — потом.", ""); }
-      },
-      {
-        name: "Каркасник",
-        desc: "Быстро и недорого. Нюанс: качество на 100% зависит от утепления, пароизоляции и рук монтажников.",
-        cost: 560000, days: 21,
-        run() { S.flags.walls = "frame"; addQuality(7); log("Каркас собран за три недели. Теперь всё решит пирог стены: утеплитель, плёнки, вентзазор. Ошибки прячутся внутри.", ""); }
-      }
-    ]
-  },
-
-  /* 5. Крыша */
-  {
-    tag: "Этап 4 из 9",
-    title: "Крыша",
-    sub: "Коробку нельзя оставлять открытой: дождь и снег быстро испортят стены и перекрытия.",
-    plotInfo: () => "Коробка стоит. " + (isAutumn() || isWinter() ? "<b>На дворе " + SEASONS[seasonIdx()].toLowerCase() + " — тянуть с кровлей опасно!</b>" : "Погода пока щадит, но расслабляться рано."),
-    options: () => [
-      {
-        name: "Металлочерепица + полный пирог",
-        desc: "Гидроизоляция, контробрешётка, вентзазор — всё по уму. Служит 30–50 лет.",
-        cost: 420000, days: 18,
-        run() { S.flags.roof = "metal"; addQuality(10); log("Крыша закрыта металлочерепицей с правильным кровельным пирогом. Дому больше не страшен дождь.", "good"); }
-      },
-      {
-        name: "Гибкая черепица",
-        desc: "Тихая под дождём, красивая. Нужно сплошное основание из ОСП — чуть дороже и дольше.",
-        cost: 470000, days: 22,
-        run() { S.flags.roof = "soft"; addQuality(10); log("Мягкая кровля уложена на сплошное основание. Дождь теперь звучит уютно, а не тревожно.", "good"); }
-      },
-      {
-        name: "Временная кровля из рубероида",
-        desc: "«Перезимуем, а весной сделаем нормально». Дёшево, но это всегда риск протечек.",
-        cost: 90000, days: 6,
-        run() {
-          S.flags.roof = "temp"; addQuality(-6);
-          mistake("Оставили дом под временной кровлей — рубероид на ветру живёт недолго.");
-          log("Натянули рубероид. Каждый сильный ветер теперь — маленькая лотерея.", "warn");
-          if (Math.random() < 0.5) { addQuality(-6); S.day += 5; log("Штормовой ветер порвал рубероид, перекрытие намокло. Латаем и сушим.", "bad"); }
-        }
-      }
-    ]
-  },
-
-  /* 6. Окна и двери */
-  {
-    tag: "Этап 5 из 9",
-    title: "Окна и двери",
-    sub: "Тепловой контур: без него внутри не сделать ничего — отделка и стяжка требуют плюсовой температуры.",
-    plotInfo: () => S.flags.walls === "timber"
-      ? "Внимание: в срубе окна ставят в <b>обсаду (окосячку)</b> — иначе усадка выдавит рамы."
-      : "Коробка под крышей. Закрываем тепловой контур.",
-    options: () => [
-      {
-        name: "Качественные окна, монтаж по ГОСТ",
-        desc: "Двухкамерные стеклопакеты, монтажные ленты ПСУЛ, тёплый порог." ,
-        cost: 280000, days: 8,
-        run() {
-          S.flags.windows = true; addQuality(8);
-          if (S.flags.walls === "timber") { spend(60000, 4); achieve("Окна в срубе поставили в обсаду — усадка им не страшна."); log("Окна смонтированы по ГОСТ, в срубе — через обсаду. Монтажная пена закрыта лентами, промерзать не будет.", "good"); }
-          else log("Окна установлены по ГОСТ: с пароизоляционными лентами, а не «запенил и забыл».", "good");
-        }
-      },
-      {
-        name: "Эконом-окна, монтаж «на пену»",
-        desc: "Однокамерные, без лент. Пена без защиты разрушается от ультрафиолета за пару лет.",
-        cost: 150000, days: 5,
-        run() {
-          S.flags.windows = true; addQuality(-4);
-          mistake("Окна смонтированы «на пену» без лент — через пару лет швы начнут продувать.");
-          if (S.flags.walls === "timber" && Math.random() < 0.6) { addQuality(-8); S.flags.cracked = true; mistake("В срубе окна поставили без обсады — усадка перекосила рамы."); log("В срубе окна воткнули жёстко, без обсады. Брус сядет — рамы перекосит. Уже похрустывает...", "bad"); }
-          else log("Дёшево и сердито. Зимой у окон будет ощутимо дуть, но тепловой контур закрыт.", "warn");
-        }
-      }
-    ]
-  },
-
-  /* 7. Инженерные системы */
-  {
-    tag: "Этап 6 из 9",
-    title: "Инженерные системы",
-    sub: "Выберите, что заводить в дом. Про вентиляцию в частных домах забывают чаще всего — и зря.",
-    type: "multi",
-    plotInfo: () => "Все коммуникации разводят <b>до</b> отделки. Потом — только штробить и переделывать.",
-    multiOptions: () => [
-      { key: "electric", label: "Электрика: щит, медная разводка, УЗО", cost: 180000, days: 12, required: true },
-      { key: "water", label: "Водоснабжение и канализация (скважина + септик)", cost: 260000, days: 15, required: true },
-      { key: "heating", label: "Отопление: котёл и радиаторы", cost: 320000, days: 14, required: true },
-      { key: "ventilation", label: "Вентиляция: приточные клапаны + вытяжные каналы", cost: 90000, days: 6, required: false },
-      { key: "warmfloor", label: "Тёплый пол в санузлах и прихожей (комфорт)", cost: 110000, days: 7, required: false }
-    ],
-    runMulti(selected) {
-      S.flags.engineering = true;
-      let msgs = [];
-      if (!selected.electric || !selected.water || !selected.heating) {
-        addQuality(-20);
-        mistake("Дом остался без базовых коммуникаций — жить в нём нельзя.");
-        msgs.push(["Без " + [!selected.electric && "электрики", !selected.water && "воды", !selected.heating && "отопления"].filter(Boolean).join(", ") + " это не дом, а сарай с окнами.", "bad"]);
+  switch (j.kind) {
+    case "surveyJob": {
+      const id = C.survey;
+      if (id === "geo") {
+        state.soilKnown = true; addQ(10);
+        win("Провели геологию — фундамент выбирали не вслепую.");
+        log("Геологи: грунт — <b>" + SOILS[state.soil].name + "</b> (" + SOILS[state.soil].desc + "), вода " + (state.highWater ? "<b>высокая</b>" : "низкая") + ". Проект готов.", "good");
+      } else if (id === "typical") {
+        addQ(2); log("Типовой проект скачан. Что под ногами — по-прежнему загадка.", "warn");
       } else {
-        addQuality(10);
-        msgs.push(["Базовые коммуникации разведены до отделки — как и положено.", "good"]);
+        addQ(-8); mistake("Строили без проекта — узлы додумывали по ходу дела.");
+        log("Строим «по месту». Бригада довольна: спросить не с кого.", "bad");
       }
-      if (selected.ventilation) {
-        S.flags.ventilation = true; addQuality(7);
-        achieve("Не забыли про вентиляцию — в доме будет сухо и свежо.");
-        msgs.push(["Вентиляция смонтирована. В современном герметичном доме без неё — конденсат, плесень и духота.", "good"]);
-      } else {
-        addQuality(-10);
-        mistake("Забыли вентиляцию: пластиковые окна + герметичный контур = запотевшие стёкла и плесень в углах.");
-        msgs.push(["Вентиляцию решили не делать. Первой же зимой окна заплачут, а в углах появятся тёмные пятна.", "bad"]);
-        if (S.flags.walls === "frame" || S.flags.walls === "gasblock") { addQuality(-5); msgs.push(["Для " + (S.flags.walls === "frame" ? "каркасника" : "газобетона") + " это особенно критично — влаге некуда уходить.", "bad"]); }
-      }
-      if (selected.warmfloor) { addQuality(4); msgs.push(["Тёплый пол — та мелочь, за которую себя благодарят каждое утро.", "good"]); }
-      for (const [t, c] of msgs) log(t, c);
+      setPhase("chooseFoundation");
+      break;
     }
-  },
-
-  /* 8. Утепление и фасад */
-  {
-    tag: "Этап 7 из 9",
-    title: "Утепление и фасад",
-    sub: "Главное правило: паропроницаемость слоёв должна расти изнутри наружу. Иначе точка росы окажется в стене.",
-    plotInfo: () => {
-      let extra = "";
-      if (S.flags.walls === "frame") extra = "<br><b>Каркасник:</b> пароизоляция изнутри обязательна — без неё утеплитель наберёт влагу и перестанет работать.";
-      if (S.flags.foundation === "piles") extra = "<br><b>Свайный фундамент:</b> не забудьте утеплить пол и закрыть цоколь.";
-      return "Коробка с окнами и коммуникациями готова. Утепляем и закрываем фасад." + extra;
-    },
-    options: () => [
-      {
-        name: "Полное утепление по расчёту + вентфасад",
-        desc: "Минвата нужной толщины, ветрозащита, вентзазор. Тёплый дом и низкие счета за отопление.",
-        cost: 380000, days: 20,
-        run() {
-          S.flags.facade = true; S.flags.insulated = true; addQuality(12);
-          if (S.flags.foundation === "piles") { spend(60000, 5); achieve("Утеплили пол и цоколь на сваях — снизу дуть не будет."); }
-          if (S.flags.walls === "frame") achieve("Каркасник утеплён с правильным пирогом — пароизоляция изнутри, ветрозащита снаружи.");
-          log("Фасад утеплён по расчёту, с ветрозащитой и вентзазором. Дом «одет» по погоде.", "good");
-        }
-      },
-      {
-        name: "Утеплить «как у всех», 50 мм пенопласта",
-        desc: "Дёшево. Для нашего климата откровенно мало, а на дышащих стенах пенопласт может запереть влагу.",
-        cost: 190000, days: 12,
-        run() {
-          S.flags.facade = true; addQuality(-4);
-          mistake("Утепление тоньше расчётного — котёл будет работать на улицу.");
-          if (S.flags.walls === "gasblock" || S.flags.walls === "timber") { addQuality(-6); mistake("Паронепроницаемый пенопласт на дышащей стене — влага заперта в конструкции."); log("Пенопласт на " + (S.flags.walls === "timber" ? "срубе" : "газобетоне") + " — влага из стены не выйдет наружу. Стена будет мокнуть изнутри.", "bad"); }
-          else log("Утеплили символически. Зимой котёл будет стараться, а счета — расти.", "warn");
-        }
-      },
-      {
-        name: "Пока без утепления, просто покрасить",
-        desc: "«Стены и так тёплые». Смотря какие и смотря где.",
-        cost: 60000, days: 5,
-        run() {
-          S.flags.facade = true;
-          if (S.flags.walls === "brick") { addQuality(-8); mistake("Кирпич в один слой без утепления — промерзающие стены."); log("Кирпич без утепления в нашем климате промерзает. Красиво, но холодно.", "bad"); }
-          else if (S.flags.walls === "frame") { addQuality(-15); mistake("Каркасник без утепления — это беседка, а не дом."); log("Каркасник без утеплителя? Внутри будет как снаружи, только без ветра.", "bad"); }
-          else { addQuality(-5); mistake("Сэкономили на утеплении — отопление будет золотым."); log("Оставили как есть. Жить можно, но зимние счета вас не обрадуют.", "warn"); }
-        }
-      }
-    ]
-  },
-
-  /* 9. Усадка сруба (условный) */
-  {
-    tag: "Технологическая пауза",
-    title: "Усадка сруба",
-    sub: "Брус естественной влажности садится 6–12 месяцев. Отделка до усадки — деньги на ветер.",
-    condition: () => S.flags.walls === "timber",
-    plotInfo: () => "Прораб напоминает: сруб ещё «играет». Начинать чистовую отделку сейчас — рискованно.",
-    options: () => [
-      {
-        name: "Выждать усадку (8 месяцев)",
-        desc: "Дом стоит под крышей и «отдыхает». Долго, но отделка потом ляжет намертво.",
-        cost: 30000, days: 240,
-        run() { addQuality(10); achieve("Дождались усадки сруба — отделку не порвёт."); log("Восемь месяцев терпения. Сруб сел, венцы уплотнились — теперь можно отделывать без страха.", "good"); }
-      },
-      {
-        name: "Отделывать сразу, на скользящих креплениях",
-        desc: "Компромисс: специальные направляющие компенсируют усадку. Дороже и нужны грамотные руки.",
-        cost: 90000, days: 10,
-        run() {
-          if (Math.random() < 0.35) { addQuality(-8); mistake("Скользящий крепёж смонтировали с ошибками — отделку повело при усадке."); log("Скользящие крепления сделали кое-как. Кое-где отделку всё-таки повело.", "bad"); }
-          else { addQuality(5); achieve("Скользящий крепёж отработал — усадка прошла незаметно для отделки."); log("Грамотный монтаж на скользящих креплениях. Сруб садится, отделка — на месте.", "good"); }
-        }
-      },
-      {
-        name: "Какая ещё усадка? Отделываем жёстко!",
-        desc: "Гипсокартон на жёсткий каркас, плитку на стены. Через полгода узнаете, зачем была нужна пауза.",
-        cost: 0, days: 2,
-        run() { addQuality(-15); S.flags.cracked = true; mistake("Жёсткая отделка по свежему срубу — усадка порвала гипсокартон и плитку."); log("Через несколько месяцев сруб сел на положенные сантиметры. Отделка пошла трещинами и волнами. Переделывать.", "bad"); }
-      }
-    ]
-  },
-
-  /* 10. Внутренняя отделка */
-  {
-    tag: "Этап 9 из 9",
-    title: "Внутренняя отделка",
-    sub: "Финишная прямая. Здесь экономия видна каждый день, а качество радует годами.",
-    plotInfo: () => "Осталось превратить стройку в дом: полы, стены, потолки, санузлы.",
-    options: () => [
-      {
-        name: "Полноценный ремонт «под ключ»",
-        desc: "Стяжка, штукатурка по маякам, чистовые материалы среднего класса.",
-        cost: 520000, days: 45,
-        run() { S.flags.finishDone = true; addQuality(10); log("Отделка завершена. Пахнет свежей краской и новосельем!", "good"); }
-      },
-      {
-        name: "Бюджетная отделка своими руками",
-        desc: "Дольше и попроще, зато душевно и заметно дешевле.",
-        cost: 260000, days: 70,
-        run() { S.flags.finishDone = true; addQuality(5); achieve("Отделали дом своими руками — есть чем гордиться."); log("Два месяца вечеров и выходных — и дом готов. Каждый угол сделан своими руками.", "good"); }
-      },
-      {
-        name: "«Жить можно и так» — черновой минимум",
-        desc: "Бетонные полы, голые стены. Зато быстро и почти бесплатно.",
-        cost: 80000, days: 10,
-        run() { S.flags.finishDone = true; addQuality(-6); mistake("Заехали в дом с черновой отделкой — ремонт растянется на годы."); log("Заехали «на бетон». Знакомые говорят, это на пару месяцев. Статистика говорит — на пять лет.", "warn"); }
-      }
-    ]
-  }
-];
-
-/* зимнее бетонирование */
-function winterConcreteCheck() {
-  if (isWinter()) {
-    const extra = 60000;
-    S.money -= extra;
-    addQuality(-4);
-    mistake("Бетонирование зимой — противоморозные добавки и прогрев (+" + fmtMoney(extra) + "), и всё равно риск.");
-    log("Зимнее бетонирование: пришлось доплатить " + fmtMoney(extra) + " за добавки и электропрогрев. Зимой бетон капризен.", "warn");
-  }
-}
-
-/* ---------- случайные события ---------- */
-
-function randomEvent() {
-  if (Math.random() > 0.4) return;
-  const f = S.flags;
-  const pool = [];
-  if (f.walls && !f.roof) pool.push(() => {
-    addQuality(-7); S.day += 6;
-    mistake("Коробку без крыши залило дождями — сушили и латали.");
-    const w = document.getElementById("weather-emoji");
-    w.style.display = ""; setTimeout(() => w.style.display = "none", 4000);
-    log("Зарядили дожди. Открытая коробка промокла насквозь — неделя на просушку.", "bad");
-  });
-  pool.push(() => {
-    S.priceMul = Math.round(S.priceMul * 1.1 * 100) / 100;
-    log("Плохие новости с рынка: стройматериалы подорожали на 10%. Дальше всё будет дороже.", "warn");
-  });
-  pool.push(() => {
-    S.day += 10;
-    log("Бригада уехала «на два дня» на другой объект. Вернулась через десять. Классика жанра.", "warn");
-  });
-  pool.push(() => {
-    S.money += 60000;
-    log("Сосед закончил стройку и отдал остатки материалов. Плюс 60 000 ₽ экономии — и повод для шашлыка.", "good");
-  });
-  if (pool.length) pool[Math.floor(Math.random() * pool.length)]();
-}
-
-/* ---------- рендер этапа ---------- */
-
-function currentStage() {
-  while (S.stageIdx < STAGES.length) {
-    const st = STAGES[S.stageIdx];
-    if (!st.condition || st.condition()) return st;
-    S.stageIdx++;
-  }
-  return null;
-}
-
-function renderStage() {
-  const card = document.getElementById("stage-card");
-  const st = currentStage();
-  if (!st) { renderFinal(); return; }
-
-  let html = '<span class="stage-tag">' + st.tag + '</span>'
-    + "<h2>" + st.title + "</h2>"
-    + '<p class="sub">' + st.sub + "</p>"
-    + '<div class="plot-info">' + st.plotInfo() + "</div>";
-
-  if (st.type === "multi") {
-    const opts = st.multiOptions();
-    html += opts.map((o, i) =>
-      '<label class="check-row" id="chk-row-' + i + '">'
-      + '<input type="checkbox" data-key="' + o.key + '" ' + (o.required ? "checked" : "") + ">"
-      + '<span><b>' + o.label + "</b><br><span style='color:var(--muted);font-size:12.5px'>💰 "
-      + fmtMoney(o.cost) + " · ⏱ " + fmtDays(o.days) + (o.required ? " · <i>без этого дом нежилой</i>" : "") + "</span></span></label>"
-    ).join("");
-    html += '<button class="btn" id="multi-done">Смонтировать выбранное</button>';
-    card.innerHTML = html;
-    for (const row of card.querySelectorAll(".check-row")) {
-      const input = row.querySelector("input");
-      const sync = () => row.classList.toggle("checked", input.checked);
-      input.addEventListener("change", sync); sync();
+    case "dig":
+      F.dug = true;
+      startPour();
+      break;
+    case "pour": {
+      F.foundationDone = true;
+      evalFoundation();
+      const f = CAT.foundation.find(x => x.id === C.foundation);
+      if (f.concrete) {
+        log("Бетон залит. Марочную прочность он набирает 28 суток — нагружать раньше рискованно.", "");
+        startJob("cure", "Бетон набирает прочность", 12);
+      } else setPhase("chooseWalls");
+      break;
     }
-    document.getElementById("multi-done").onclick = () => {
-      const selected = {};
-      let cost = 0, days = 0;
-      for (const input of card.querySelectorAll("input[type=checkbox]")) {
-        if (input.checked) {
-          selected[input.dataset.key] = true;
-          const o = opts.find(x => x.key === input.dataset.key);
-          cost += o.cost; days += o.days;
-        }
-      }
-      spend(cost, days);
-      st.runMulti(selected);
-      afterStage();
+    case "cure":
+      F.cured = true; addQ(8);
+      win("Дали бетону набрать прочность — по учебнику.");
+      log("Фундамент набрал прочность. Можно строить дальше!", "good");
+      setPhase("chooseWalls");
+      break;
+    case "walls":
+      F.wallsDone = true;
+      evalWalls();
+      setPhase("chooseRoof");
+      break;
+    case "roof":
+      F.roofDone = true;
+      evalRoof();
+      setPhase("chooseWindows");
+      break;
+    case "windows":
+      F.windowsDone = true;
+      evalWindows();
+      setPhase("chooseEng");
+      break;
+    case "eng":
+      F.engDone = true;
+      evalEng();
+      setPhase("chooseFacade");
+      break;
+    case "facade":
+      F.facadeDone = true;
+      evalFacade();
+      setPhase(C.walls === "timber" ? "shrinkChoice" : "chooseFinish");
+      break;
+    case "shrinkWait":
+      F.shrunk = true; addQ(10);
+      win("Дождались усадки сруба — отделку не порвёт.");
+      log("Сруб сел, венцы уплотнились. Теперь можно отделывать без страха.", "good");
+      setPhase("chooseFinish");
+      break;
+    case "skid":
+      F.shrunk = true;
+      if (Math.random() < 0.35) { addQ(-8); mistake("Скользящий крепёж смонтировали с ошибками — отделку повело."); log("Скользящие крепления сделали кое-как — местами отделку повело.", "bad"); }
+      else { addQ(5); win("Скользящий крепёж отработал — усадка прошла незаметно."); log("Грамотный монтаж: сруб садится, отделка на месте.", "good"); }
+      setPhase("chooseFinish");
+      break;
+    case "rigid":
+      F.shrunk = true; addQ(-15); F.cracked = true;
+      mistake("Жёсткая отделка по свежему срубу — усадка порвала гипсокартон и плитку.");
+      log("Сруб сел на положенные сантиметры — отделка пошла трещинами. Переделывать.", "bad");
+      setPhase("chooseFinish");
+      break;
+    case "finish":
+      F.finishDone = true;
+      evalFinish();
+      setPhase("done");
+      if (!loading) showFinal();
+      break;
+  }
+  save();
+}
+
+function setPhase(p) { state.phase = p; save(); renderPanel(); }
+
+/* ================= выборы игрока ================= */
+
+function chooseSurvey(id) {
+  const m = CAT.survey.find(x => x.id === id);
+  state.choices.survey = id; spend(m.cost);
+  startJob("surveyJob", id === "geo" ? "Геологи бурят скважины" : "Готовим бумаги", m.mins);
+}
+
+function chooseFoundation(id) {
+  const m = CAT.foundation.find(x => x.id === id);
+  state.choices.foundation = id; spend(m.cost);
+  if (m.concrete && isWinter()) {
+    spend(60000); addQ(-4);
+    mistake("Бетонирование зимой — добавки и прогрев (+60 000 ₽), и всё равно риск.");
+    log("Зимнее бетонирование: доплатили 60 000 ₽ за противоморозные добавки и прогрев.", "warn");
+  }
+  if (m.dig) startJob("dig", "Экскаватор копает котлован", 1.5);
+  else startPour();
+}
+function startPour() {
+  const m = CAT.foundation.find(x => x.id === state.choices.foundation);
+  startJob("pour", m.concrete ? "Заливаем " + m.name.toLowerCase() : "Закручиваем сваи", m.mins);
+}
+
+function evalFoundation() {
+  const id = state.choices.foundation, soil = state.soil, F = state.flags;
+  if (id === "slab") { addQ(12); log("Плита готова: распределяет нагрузку, слабых грунтов не боится.", "good"); }
+  else if (id === "strip") {
+    if (soil === "peat") { addQ(-25); F.badFoundation = true; F.cracked = true; mistake("Лента на торфянике — неравномерная осадка, перекосы."); log("Под лентой — торф! Слабый грунт сжимается неравномерно: жди трещин.", "bad"); }
+    else if (state.highWater) { addQ(4); mistake("Высокие грунтовые воды: заглублённой ленте нужен был дренаж."); log("Лента готова, но вода высокая — без дренажа цоколь будет сырым.", "warn"); }
+    else { addQ(10); log("Заглублённая лента ниже промерзания — пучение не страшно.", "good"); }
+  }
+  else if (id === "shallow") {
+    if (soil === "peat") { addQ(-30); F.badFoundation = true; F.cracked = true; mistake("МЗЛФ на торфянике — фундамент «поплыл»."); log("МЗЛФ на торфе — почти гарантированные просадки. Сэкономили...", "bad"); }
+    else if (soil === "clay" || (soil === "loam" && state.highWater)) { addQ(-18); F.badFoundation = true; F.cracked = true; mistake("МЗЛФ на пучинистом грунте — ленту будет «гулять» каждую зиму."); log("На " + SOILS[soil].name + "е морозное пучение будет поднимать мелкую ленту каждую зиму.", "bad"); }
+    else { addQ(7); log("На " + SOILS[soil].name + "е МЗЛФ — разумная экономия.", "good"); }
+  }
+  else if (id === "piles") {
+    addQ(6);
+    if (soil === "peat" || state.highWater) { addQ(6); win("Сваи на слабом/мокром грунте — грамотное решение."); log("Сваи дошли до плотного слоя. Для " + SOILS[soil].name + "а — отличный выбор.", "good"); }
+    else log("Сваи стоят. Не забудьте утеплить пол и закрыть цоколь.", "");
+  }
+}
+
+function chooseWalls(id, armo) {
+  const m = CAT.walls.find(x => x.id === id);
+  state.choices.walls = id; state.choices.armo = !!armo;
+  spend(m.cost + (id === "gasblock" && armo ? m.addon.cost : 0));
+  startJob("walls", "Строим стены: " + m.name.toLowerCase(), m.mins);
+}
+function evalWalls() {
+  const id = state.choices.walls, F = state.flags;
+  if (id === "brick") { addQ(12); log("Кирпичная коробка готова. Выглядит на века — соседи завидуют.", "good"); }
+  else if (id === "gasblock") {
+    if (state.choices.armo) { addQ(12); win("Армопояс по газобетону — трещин от точечных нагрузок не будет."); log("Газобетон с монолитным армопоясом: перекрытия лягут на бетон, а не на хрупкий блок.", "good"); }
+    else { addQ(-10); F.cracked = true; mistake("Газобетон без армопояса — балки продавили блоки, пошли трещины."); log("Сэкономили на армопоясе — над проёмами появились трещины.", "bad"); }
+  }
+  else if (id === "timber") { addQ(8); log("Сруб собран. Помните: брус будет садиться до года — отделка потом!", ""); }
+  else { addQ(7); log("Каркас собран за пару недель. Теперь всё решит пирог стены.", ""); }
+}
+
+function chooseRoof(id) {
+  const m = CAT.roof.find(x => x.id === id);
+  state.choices.roof = id; spend(m.cost);
+  startJob("roof", "Монтируем крышу: " + m.name.toLowerCase(), m.mins);
+}
+function evalRoof() {
+  const id = state.choices.roof;
+  if (id === "temp") {
+    addQ(-6); mistake("Оставили дом под временной кровлей — рубероид на ветру живёт недолго.");
+    log("Натянули рубероид. Каждый сильный ветер теперь — маленькая лотерея.", "warn");
+    if (Math.random() < 0.5) { addQ(-6); mistake("Ветер порвал времянку, перекрытие намокло."); log("Штормовой ветер порвал рубероид, перекрытие намокло!", "bad"); }
+  } else { addQ(10); log("Крыша закрыта с правильным кровельным пирогом. Дождь больше не страшен.", "good"); }
+}
+
+function chooseWindows(id) {
+  const m = CAT.windows.find(x => x.id === id);
+  state.choices.windows = id;
+  let cost = m.cost;
+  if (id === "gost" && state.choices.walls === "timber") cost += 60000;
+  spend(cost);
+  startJob("windows", "Ставим окна и двери", m.mins);
+}
+function evalWindows() {
+  const id = state.choices.windows, F = state.flags;
+  if (id === "gost") {
+    addQ(8);
+    if (state.choices.walls === "timber") { win("Окна в срубе — через обсаду, усадка им не страшна."); log("Окна по ГОСТ, в срубе — через обсаду. Промерзать не будет.", "good"); }
+    else log("Окна по ГОСТ: с лентами, а не «запенил и забыл».", "good");
+  } else {
+    addQ(-4); mistake("Окна «на пену» без лент — через пару лет швы начнут продувать.");
+    if (state.choices.walls === "timber" && Math.random() < 0.6) { addQ(-8); F.cracked = true; mistake("Окна в срубе без обсады — усадка перекосила рамы."); log("В срубе окна воткнули жёстко, без обсады. Брус сядет — рамы перекосит.", "bad"); }
+    else log("Дёшево и сердито: у окон зимой будет дуть, но контур закрыт.", "warn");
+  }
+}
+
+function startEng(selected) {
+  state.choices.eng = selected;
+  let cost = 0;
+  for (const it of CAT.eng) if (selected[it.key]) cost += it.cost;
+  spend(cost);
+  startJob("eng", "Разводим коммуникации", 3);
+}
+function evalEng() {
+  const sel = state.choices.eng, F = state.flags;
+  if (!sel.electric || !sel.water || !sel.heating) {
+    addQ(-20); mistake("Дом без базовых коммуникаций — жить в нём нельзя.");
+    log("Без базовых коммуникаций это не дом, а сарай с окнами.", "bad");
+  } else { addQ(10); log("Базовые коммуникации разведены до отделки — как положено.", "good"); }
+  if (sel.ventilation) { F.ventilation = true; addQ(7); win("Не забыли вентиляцию — в доме будет сухо и свежо."); log("Вентиляция смонтирована. В герметичном доме без неё — конденсат и плесень.", "good"); }
+  else {
+    addQ(-10); mistake("Забыли вентиляцию: герметичный контур = запотевшие окна и плесень.");
+    log("Вентиляцию не делаем. Первой же зимой окна «заплачут», в углах — тёмные пятна.", "bad");
+    if (state.choices.walls === "frame" || state.choices.walls === "gasblock") { addQ(-5); log("Для " + (state.choices.walls === "frame" ? "каркасника" : "газобетона") + " это особенно критично.", "bad"); }
+  }
+  if (sel.warmfloor) { addQ(4); log("Тёплый пол — мелочь, за которую себя благодарят каждое утро.", "good"); }
+}
+
+function chooseFacade(id) {
+  const m = CAT.facade.find(x => x.id === id);
+  state.choices.facade = id;
+  let cost = m.cost;
+  if (id === "full" && state.choices.foundation === "piles") cost += 60000;
+  spend(cost);
+  startJob("facade", "Утепляем и закрываем фасад", m.mins);
+}
+function evalFacade() {
+  const id = state.choices.facade, w = state.choices.walls;
+  if (id === "full") {
+    addQ(12); state.flags.insulated = true;
+    if (state.choices.foundation === "piles") win("Утеплили пол и цоколь на сваях — снизу дуть не будет.");
+    if (w === "frame") win("Каркасник утеплён с правильным пирогом: пароизоляция изнутри, ветрозащита снаружи.");
+    log("Фасад утеплён по расчёту, с вентзазором. Дом «одет» по погоде.", "good");
+  } else if (id === "thin") {
+    addQ(-4); mistake("Утепление тоньше расчётного — котёл будет работать на улицу.");
+    if (w === "gasblock" || w === "timber") { addQ(-6); mistake("Пенопласт на дышащей стене — влага заперта в конструкции."); log("Пенопласт на " + (w === "timber" ? "срубе" : "газобетоне") + " запер влагу — стена будет мокнуть изнутри.", "bad"); }
+    else log("Утеплили символически. Зимой счета будут расти.", "warn");
+  } else {
+    if (w === "brick") { addQ(-8); mistake("Кирпич без утепления — промерзающие стены."); log("Кирпич без утепления в нашем климате промерзает.", "bad"); }
+    else if (w === "frame") { addQ(-15); mistake("Каркасник без утепления — это беседка, а не дом."); log("Каркасник без утеплителя? Внутри будет как снаружи, только без ветра.", "bad"); }
+    else { addQ(-5); mistake("Сэкономили на утеплении — отопление будет золотым."); log("Оставили как есть. Зимние счета вас не обрадуют.", "warn"); }
+  }
+}
+
+function chooseShrink(id) {
+  const m = CAT.shrink.find(x => x.id === id);
+  spend(m.cost);
+  if (id === "wait") startJob("shrinkWait", "Сруб даёт усадку", m.mins);
+  else if (id === "skid") startJob("skid", "Монтаж на скользящих креплениях", m.mins);
+  else startJob("rigid", "Жёсткая отделка без пауз", m.mins);
+}
+
+function chooseFinish(id) {
+  const m = CAT.finish.find(x => x.id === id);
+  state.choices.finish = id; spend(m.cost);
+  startJob("finish", "Внутренняя отделка", m.mins);
+}
+function evalFinish() {
+  const id = state.choices.finish;
+  if (id === "full") { addQ(10); log("Отделка завершена. Пахнет свежей краской и новосельем!", "good"); }
+  else if (id === "diy") { addQ(5); win("Отделали дом своими руками — есть чем гордиться."); log("Каждый угол сделан своими руками. Готово!", "good"); }
+  else { addQ(-6); mistake("Заехали «на бетон» — ремонт растянется на годы."); log("Заехали с черновой отделкой. Говорят, на пару месяцев. Статистика говорит — на пять лет.", "warn"); }
+}
+
+/* ================= бетон: ускорение и риск ================= */
+
+function boostCure() {
+  if (!state.job || state.job.kind !== "cure") return;
+  spend(60000);
+  const t = Date.now();
+  state.job.end = t + (state.job.end - t) * 0.3;
+  state.job.meta.boosted = true;
+  log("Прогрев и добавки: бетон дозреет в разы быстрее.", "warn");
+  save(); renderPanel();
+}
+function riskCure() {
+  if (!state.job || state.job.kind !== "cure") return;
+  const p = jobProgress();
+  state.job = null; state.flags.cured = true;
+  if (Math.random() < (1 - p) * 0.9) {
+    addQ(-10); state.flags.cracked = true;
+    mistake("Нагрузили недозревший бетон — по цоколю пошли трещины.");
+    log("Поторопились: бетон ещё «дышал», по цоколю пошли трещины.", "bad");
+  } else { addQ(1); log("Рискнули и продолжили раньше срока. В этот раз пронесло.", ""); }
+  setPhase("chooseWalls");
+}
+
+/* ================= погода и мини-действия ================= */
+
+const PROMPT_MS = Math.max(2500, 14000 / Math.min(SPEED, 10));
+
+function schedulePrompt(type, title, btn) {
+  state.prompt = { type, title, btn, start: Date.now(), deadline: Date.now() + PROMPT_MS };
+  save();
+}
+function resolvePrompt(ok) {
+  const p = state.prompt;
+  state.prompt = null;
+  if (!p) return;
+  if (p.type === "cover") {
+    if (ok) { addQ(2); log("Успели накрыть плёнкой — стройматериалы сухие!", "good"); }
+    else { addQ(-6); mistake("Дождь намочил открытую стройку — сушили и латали."); log("Не успели накрыть: всё промокло насквозь.", "bad"); }
+  } else if (p.type === "water") {
+    if (ok) { addQ(2); log("Полили бетон — в жару это обязательный уход.", "good"); }
+    else { addQ(-3); mistake("Бетон пересох в жару без полива — прочность ниже."); log("Бетон пересох на солнце — поверхность пошла микротрещинами.", "warn"); }
+  }
+  save(); updateHud();
+}
+
+function weatherTick(t) {
+  if (state.phase === "done") return;
+  if (t > state.nextRain) {
+    state.nextRain = t + (2.5 + Math.random() * 3) * (isAutumn() ? 0.6 : 1) * MIN;
+    state.rainUntil = t + 15000;
+    if (!loading && !state.prompt) {
+      const vulnerable = (state.flags.wallsDone && !state.flags.roofDone) ||
+        (state.job && state.job.kind === "cure" && jobProgress() < 0.35);
+      if (vulnerable && !isWinter()) schedulePrompt("cover", isAutumn() ? "Ливень! Стройка открыта!" : "Дождь! Стройка открыта!", "🛡️ Накрыть плёнкой");
+    }
+  }
+  if (!loading && state.job && state.job.kind === "cure" && isSummer() && !state.prompt && t > state.nextHeat) {
+    state.nextHeat = t + 3 * MIN;
+    if (jobProgress() < 0.8) schedulePrompt("water", "Жара! Бетон сохнет слишком быстро", "🚿 Полить бетон");
+  }
+}
+
+/* ================= главный тик ================= */
+
+let lastSaved = 0;
+function tick() {
+  const t = Date.now();
+  while (state.job && t >= state.job.end) completeJob();
+  if (state.prompt && t > state.prompt.deadline) resolvePrompt(false);
+  weatherTick(t);
+  state.lastSeen = t;
+  if (t - lastSaved > 5000) { save(); lastSaved = t; }
+  updateHud();
+  updatePromptUI();
+  updateJobUI();
+}
+
+/* ================= HUD и панель ================= */
+
+function updateHud() {
+  const m = document.getElementById("h-money");
+  m.textContent = fmtMoney(state.money);
+  m.classList.toggle("neg", state.money < 0);
+  document.getElementById("h-day").textContent = "День " + day() + " · " + SEASONS[seasonIdx()];
+  const q = Math.max(0, Math.min(100, state.quality));
+  document.getElementById("h-q").textContent = q + " / 100";
+  document.getElementById("h-qf").style.width = q + "%";
+  const act = document.getElementById("h-act"), actf = document.getElementById("h-actf");
+  if (state.job) {
+    act.textContent = state.job.label + " · осталось " + fmtMin(state.job.end - Date.now());
+    actf.style.width = (jobProgress() * 100) + "%";
+  } else if (state.phase === "done") { act.textContent = "Дом построен! 🎉"; actf.style.width = "100%"; }
+  else { act.textContent = "Ждём вашего решения →"; actf.style.width = "0%"; }
+}
+
+function updatePromptUI() {
+  const el = document.getElementById("prompt");
+  if (state.prompt) {
+    el.style.display = "block";
+    document.getElementById("prompt-title").textContent = state.prompt.title;
+    document.getElementById("prompt-btn").textContent = state.prompt.btn;
+    const left = Math.max(0, state.prompt.deadline - Date.now());
+    document.getElementById("prompt-bar").style.width = (left / PROMPT_MS * 100) + "%";
+  } else el.style.display = "none";
+}
+
+function updateJobUI() {
+  const bar = document.getElementById("job-bar");
+  if (bar && state.job) {
+    bar.style.width = (jobProgress() * 100) + "%";
+    const tl = document.getElementById("job-left");
+    if (tl) tl.textContent = "осталось " + fmtMin(state.job.end - Date.now());
+  }
+}
+
+function cardHTML(m, act, extraCost) {
+  const cost = m.cost + (extraCost || 0);
+  let addon = "";
+  if (m.addon) addon = '<div class="addon" style="margin:-4px 0 8px"><label><input type="checkbox" id="addon-' + m.id + '" ' + (m.addon.def ? "checked" : "") + "> " + m.addon.label + "</label></div>";
+  return '<button class="mcard" data-act="' + act + '" data-id="' + m.id + '"' + (m.addon ? ' style="margin-bottom:4px"' : "") + ">"
+    + '<span class="row1"><span class="ic">' + m.ic + '</span><span class="name">' + m.name + "</span></span>"
+    + '<span class="desc">' + m.desc + "</span>"
+    + '<span class="meta"><span>💰 <b>' + (cost ? fmtMoney(cost) : "бесплатно") + "</b></span><span>⏱ <b>" + fmtMin(m.mins * MIN) + "</b></span></span>"
+    + "</button>" + addon;
+}
+
+function jobHTML(note, actions) {
+  const j = state.job;
+  return '<div class="jobbox">'
+    + '<div style="font-size:34px">🚧</div>'
+    + '<div class="jl">' + j.label + "</div>"
+    + '<div class="jt" id="job-left">осталось ' + fmtMin(j.end - Date.now()) + "</div>"
+    + '<div class="jbar"><i id="job-bar" style="width:' + (jobProgress() * 100) + '%"></i></div>'
+    + (note ? '<p class="sub" style="margin-top:10px">' + note + "</p>" : "")
+    + (actions || "")
+    + "</div>";
+}
+
+function renderPanel() {
+  const p = document.getElementById("panel");
+  const ph = state.phase;
+  let html = '<span class="stage-tag">' + (STAGE_NUM[ph] || "") + "</span>";
+
+  const soilInfo = state.soilKnown
+    ? "Грунт: <b>" + SOILS[state.soil].name + "</b>, вода " + (state.highWater ? "<b>высокая</b>" : "низкая") + "."
+    : "Грунт: <b>неизвестен</b> — изыскания не проводились.";
+
+  switch (ph) {
+    case "chooseSurvey":
+      html += "<h2>С чего начнём?</h2><p class='sub'>Любая стройка начинается с бумажек. Или нет?</p>"
+        + '<div class="plot-info">Участок 10 соток, подъезд есть, электричество по границе.<br>Грунт: <b>неизвестен</b> — без изысканий можно только гадать.</div>'
+        + CAT.survey.map(m => cardHTML(m, "survey")).join("");
+      break;
+    case "chooseFoundation":
+      html += "<h2>Выбираем фундамент</h2><p class='sub'>Единственная часть дома, которую нельзя переделать. Выбирайте под грунт, а не под кошелёк.</p>"
+        + '<div class="plot-info">' + soilInfo + (isWinter() ? "<br><b>Сейчас зима:</b> бетонные работы дороже и рискованнее." : "") + "</div>"
+        + CAT.foundation.map(m => cardHTML(m, "found")).join("");
+      break;
+    case "chooseWalls":
+      html += "<h2>Из чего строим стены?</h2><p class='sub'>У каждого материала свои нюансы: усадка, армопояс, паробарьер.</p>"
+        + CAT.walls.map(m => cardHTML(m, "walls")).join("");
+      break;
+    case "chooseRoof":
+      html += "<h2>Крыша</h2><p class='sub'>Коробку нельзя оставлять открытой: дождь быстро испортит стены и перекрытия." + (isAutumn() ? " <b>На дворе осень — тянуть опасно!</b>" : "") + "</p>"
+        + CAT.roof.map(m => cardHTML(m, "roof")).join("");
+      break;
+    case "chooseWindows":
+      html += "<h2>Окна и двери</h2><p class='sub'>Тепловой контур: без него внутри не сделать ничего."
+        + (state.choices.walls === "timber" ? " <b>В срубе окна ставят в обсаду — иначе усадка выдавит рамы.</b>" : "") + "</p>"
+        + CAT.windows.map(m => cardHTML(m, "win", m.id === "gost" && state.choices.walls === "timber" ? 60000 : 0)).join("");
+      break;
+    case "chooseEng": {
+      html += "<h2>Инженерные системы</h2><p class='sub'>Все коммуникации разводят <b>до</b> отделки. Отметьте, что заводим в дом.</p>"
+        + CAT.eng.map((o, i) =>
+          '<label class="chk on" id="chk-' + i + '"><input type="checkbox" data-key="' + o.key + '" checked>'
+          + "<span><b>" + o.label + "</b><br><small>💰 " + fmtMoney(o.cost) + (o.req ? " · без этого дом нежилой" : o.hint ? " · " + o.hint : "") + "</small></span></label>").join("")
+        + '<div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center">'
+        + '<span style="font-size:13px">Итого: <b id="eng-total"></b></span>'
+        + '<button class="btn" data-act="engdone">Смонтировать</button></div>';
+      break;
+    }
+    case "chooseFacade":
+      html += "<h2>Утепление и фасад</h2><p class='sub'>Паропроницаемость слоёв должна расти изнутри наружу — иначе точка росы окажется в стене."
+        + (state.choices.foundation === "piles" ? " <b>На сваях не забудьте пол и цоколь (+60 000 ₽ в варианте «по расчёту»).</b>" : "") + "</p>"
+        + CAT.facade.map(m => cardHTML(m, "facade", m.id === "full" && state.choices.foundation === "piles" ? 60000 : 0)).join("");
+      break;
+    case "shrinkChoice":
+      html += "<h2>Сруб «играет»</h2><p class='sub'>Брус естественной влажности садится 6–12 месяцев. Отделка до усадки — деньги на ветер.</p>"
+        + CAT.shrink.map(m => cardHTML(m, "shrink")).join("");
+      break;
+    case "chooseFinish":
+      html += "<h2>Внутренняя отделка</h2><p class='sub'>Финишная прямая! Здесь экономия видна каждый день, а качество радует годами.</p>"
+        + CAT.finish.map(m => cardHTML(m, "finish")).join("");
+      break;
+    case "cure":
+      html += jobHTML(
+        "Свежий бетон нельзя нагружать. В жару его поливают, в мороз — греют. Можно подождать, ускорить за деньги или рискнуть.",
+        '<div class="jobactions"><button class="btn warn sm" data-act="boost">⚡ Прогрев −60 000 ₽</button>'
+        + '<button class="btn danger sm" data-act="risk">⚠️ Рискнуть и строить</button></div>');
+      break;
+    case "shrinkWait":
+      html += jobHTML("Дом «отдыхает» под крышей. Хороший повод заняться забором и колодцем — или просто заварить чай.");
+      break;
+    case "done":
+      html += '<h2>🎉 Дом построен!</h2><p class="sub">Стройка завершена. Итоги — в отчёте.</p>'
+        + '<button class="btn" data-act="showfinal">📜 Показать отчёт</button>';
+      break;
+    default:
+      if (state.job) html += jobHTML("");
+  }
+  p.innerHTML = html;
+
+  if (ph === "chooseEng") {
+    const upd = () => {
+      let total = 0;
+      p.querySelectorAll("input[type=checkbox]").forEach((c, i) => {
+        const row = document.getElementById("chk-" + i);
+        if (row) row.classList.toggle("on", c.checked);
+        if (c.checked) total += CAT.eng.find(o => o.key === c.dataset.key).cost;
+      });
+      const el = document.getElementById("eng-total");
+      if (el) el.textContent = fmtMoney(total);
     };
-    return;
-  }
-
-  const opts = st.options();
-  html += opts.map((o, i) => {
-    let extraHtml = "";
-    if (o.extra && o.extra.type === "check") {
-      extraHtml = '<div class="meta" onclick="event.stopPropagation()"><label><input type="checkbox" id="extra-' + i + '" checked style="accent-color:var(--accent)"> ' + o.extra.label + "</label></div>";
-    }
-    return '<button class="option" data-i="' + i + '">'
-      + '<span class="name">' + o.name + "</span>"
-      + '<span class="desc">' + o.desc + "</span>"
-      + '<span class="meta"><span>💰 ' + (o.cost ? fmtMoney(Math.round(o.cost * S.priceMul)) : "бесплатно") + "</span><span>⏱ " + fmtDays(o.days) + "</span></span>"
-      + extraHtml
-      + "</button>";
-  }).join("");
-  card.innerHTML = html;
-
-  for (const btn of card.querySelectorAll(".option")) {
-    btn.onclick = () => {
-      const o = opts[+btn.dataset.i];
-      const extras = {};
-      if (o.extra) {
-        const chk = document.getElementById("extra-" + btn.dataset.i);
-        extras[o.extra.key] = chk ? chk.checked : false;
-      }
-      spend(o.cost, o.days);
-      o.run(extras);
-      afterStage();
-    };
+    p.querySelectorAll("input[type=checkbox]").forEach(c => c.addEventListener("change", upd));
+    upd();
   }
 }
 
-function afterStage() {
-  S.stageIdx++;
-  randomEvent();
-  paintHouse();
-  renderHud();
-  renderStage();
-}
-
-/* ---------- финал ---------- */
-
-function renderFinal() {
-  S.finished = true;
-  let q = Math.max(0, Math.min(100, S.quality));
-  let debtPenalty = 0;
-  if (S.money < 0) {
-    debtPenalty = Math.min(30, Math.ceil(-S.money / 60000));
-    q = Math.max(0, q - debtPenalty);
-    mistake("Стройка ушла в кредит на " + fmtMoney(-S.money) + " — проценты будут давить ещё годы (−" + debtPenalty + " к итогу).");
+document.getElementById("panel").addEventListener("click", e => {
+  if (e.target.closest(".addon")) return; // клик по чекбоксу армопояса — не выбор карточки
+  const btn = e.target.closest("[data-act]");
+  if (!btn) return;
+  const act = btn.dataset.act, id = btn.dataset.id;
+  if (act === "survey") chooseSurvey(id);
+  else if (act === "found") chooseFoundation(id);
+  else if (act === "walls") {
+    const chk = document.getElementById("addon-" + id);
+    chooseWalls(id, chk ? chk.checked : false);
   }
-  S.quality = q;
-  renderHud();
+  else if (act === "roof") chooseRoof(id);
+  else if (act === "win") chooseWindows(id);
+  else if (act === "engdone") {
+    const sel = {};
+    document.querySelectorAll("#panel input[type=checkbox]").forEach(c => { if (c.checked) sel[c.dataset.key] = true; });
+    startEng(sel);
+  }
+  else if (act === "facade") chooseFacade(id);
+  else if (act === "shrink") chooseShrink(id);
+  else if (act === "finish") chooseFinish(id);
+  else if (act === "boost") boostCure();
+  else if (act === "risk") riskCure();
+  else if (act === "showfinal") showFinal();
+});
 
-  const years = (S.day / 360).toFixed(1);
+document.getElementById("prompt-btn").addEventListener("click", () => resolvePrompt(true));
+document.getElementById("reset-btn").addEventListener("click", () => {
+  if (confirm("Снести всё и начать новую стройку? Текущий прогресс будет потерян.")) {
+    localStorage.removeItem(SAVE_KEY);
+    location.reload();
+  }
+});
+
+/* ================= финал ================= */
+
+function showFinal() {
+  let q = Math.max(0, Math.min(100, state.quality));
+  if (state.money < 0 && !state.flags.debtApplied) {
+    const dp = Math.min(30, Math.ceil(-state.money / 60000));
+    q = Math.max(0, q - dp);
+    state.quality = q; state.flags.debtApplied = true;
+    mistake("Стройка ушла в кредит на " + fmtMoney(-state.money) + " (−" + dp + " к итогу).");
+    save();
+  } else q = Math.max(0, Math.min(100, state.quality));
+
   let stars, verdict, tone;
-  if (q >= 85) { stars = "⭐⭐⭐⭐⭐"; verdict = "Дом мечты!"; tone = "Вы строили как профессионал: геология, технология, никаких «и так сойдёт». Такому дому — сто лет стоять."; }
-  else if (q >= 70) { stars = "⭐⭐⭐⭐"; verdict = "Отличный дом"; tone = "Пара шероховатостей, но в целом — добротный дом, в который приятно возвращаться."; }
-  else if (q >= 55) { stars = "⭐⭐⭐"; verdict = "Крепкий середнячок"; tone = "Жить можно, но некоторые решения ещё напомнят о себе счетами и мелким ремонтом."; }
-  else if (q >= 35) { stars = "⭐⭐"; verdict = "Проблемный самострой"; tone = "Дом стоит, но список переделок длиннее списка комнат. Экономия вышла дорогой."; }
-  else { stars = "⭐"; verdict = "Стройка-катастрофа"; tone = "Трещины, сырость и сквозняки. Иногда дешевле снести и начать заново — теперь вы знаете, как надо."; }
+  if (q >= 85) { stars = "⭐⭐⭐⭐⭐"; verdict = "Дом мечты!"; tone = "Вы строили как профессионал: геология, технология, никаких «и так сойдёт»."; }
+  else if (q >= 70) { stars = "⭐⭐⭐⭐"; verdict = "Отличный дом"; tone = "Пара шероховатостей, но в целом — добротный дом."; }
+  else if (q >= 55) { stars = "⭐⭐⭐"; verdict = "Крепкий середнячок"; tone = "Жить можно, но некоторые решения ещё напомнят о себе."; }
+  else if (q >= 35) { stars = "⭐⭐"; verdict = "Проблемный самострой"; tone = "Список переделок длиннее списка комнат."; }
+  else { stars = "⭐"; verdict = "Стройка-катастрофа"; tone = "Трещины, сырость и сквозняки. Зато теперь вы знаете, как надо."; }
 
-  const card = document.getElementById("stage-card");
-  card.innerHTML = '<div class="final">'
-    + '<span class="stage-tag">Стройка завершена</span>'
+  document.getElementById("modal").innerHTML =
+    '<span class="stage-tag">Стройка завершена</span>'
     + '<div class="stars">' + stars + "</div>"
     + '<div class="verdict">' + verdict + "</div>"
     + '<p class="sub">' + tone + "</p>"
-    + '<div class="plot-info" style="text-align:left">'
-    + "Качество дома: <b>" + q + " / 100</b><br>"
-    + "Стройка заняла: <b>" + fmtDays(S.day) + "</b> (~" + years + " г.)<br>"
-    + "Остаток бюджета: <b>" + (S.money >= 0 ? fmtMoney(S.money) : "долг " + fmtMoney(-S.money)) + "</b><br>"
-    + "Грунт на участке был: <b>" + SOILS[S.soil].name + "</b>, вода " + (S.highWater ? "высокая" : "низкая")
-    + "</div>"
-    + (S.achievements.length ? "<ul>" + S.achievements.map(a => "<li>✅ " + a + "</li>").join("") + "</ul>" : "")
-    + (S.mistakes.length ? '<ul class="mist">' + S.mistakes.map(m => "<li>⚠️ " + m + "</li>").join("") + "</ul>" : "<p class='sub'>Ни одной ошибки — снимаем каску в знак уважения!</p>")
-    + '<button class="btn" onclick="newGame()">Начать заново 🔄</button>'
-    + "</div>";
-  log("Стройка завершена! Итог: " + verdict.toLowerCase() + " (" + q + "/100).", q >= 70 ? "good" : q >= 45 ? "warn" : "bad");
+    + '<div class="plot-info" style="text-align:left">Качество: <b>' + q + " / 100</b><br>Заняло: <b>" + day() + " дн.</b><br>"
+    + "Бюджет: <b>" + (state.money >= 0 ? "остаток " + fmtMoney(state.money) : "долг " + fmtMoney(-state.money)) + "</b><br>"
+    + "Грунт был: <b>" + SOILS[state.soil].name + "</b>, вода " + (state.highWater ? "высокая" : "низкая") + "</div>"
+    + (state.wins.length ? "<ul>" + state.wins.map(a => "<li>✅ " + a + "</li>").join("") + "</ul>" : "")
+    + (state.mistakes.length ? '<ul class="mist">' + state.mistakes.map(m => "<li>⚠️ " + m + "</li>").join("") + "</ul>" : "<p class='sub'>Ни одной ошибки — снимаем каску в знак уважения!</p>")
+    + '<div style="display:flex;gap:8px;justify-content:center;margin-top:8px">'
+    + '<button class="btn ghost" onclick="hideModal()">Полюбоваться домом</button>'
+    + '<button class="btn" onclick="restart()">Строить заново 🔄</button></div>';
+  document.getElementById("modal-back").style.display = "flex";
+  startConfetti();
+}
+function hideModal() { document.getElementById("modal-back").style.display = "none"; }
+function restart() { localStorage.removeItem(SAVE_KEY); location.reload(); }
+
+function showAway() {
+  if (!awayList.length) return;
+  document.getElementById("modal").innerHTML =
+    '<span class="stage-tag">Пока вас не было</span>'
+    + '<div style="font-size:36px;margin:8px 0">🏗️</div>'
+    + '<p class="sub">Бригада не сидела без дела:</p>'
+    + "<ul>" + awayList.map(l => "<li>✅ " + l + "</li>").join("") + "</ul>"
+    + '<button class="btn" onclick="hideModal()">Продолжить стройку</button>';
+  document.getElementById("modal-back").style.display = "flex";
 }
 
-/* ---------- старт ---------- */
-newGame();
+/* ================= ИЗОМЕТРИЧЕСКИЙ РЕНДЕР ================= */
+
+const cv = document.getElementById("scene");
+const ctx = cv.getContext("2d");
+const CW = cv.width, CH = cv.height;
+const TW = 64, TH = 32;
+const CX = CW / 2, CY = 128;
+// участок 12×12, дом: x 4..9, y 4..8
+const HX = 4, HY = 4, HW = 5, HD = 4;
+const WALL_H = 74, ROOF_H = 46, FOUND_H = 16;
+
+function iso(x, y, z) { return [CX + (x - y) * (TW / 2), CY + (x + y) * (TH / 2) - (z || 0)]; }
+function poly(pts, fill, stroke) {
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath();
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+}
+function tile(x, y, fill, stroke) { poly([iso(x, y), iso(x + 1, y), iso(x + 1, y + 1), iso(x, y + 1)], fill, stroke); }
+function box(x, y, w, d, z0, h, top, left, right, stroke) {
+  const tN = iso(x, y, z0 + h), tE = iso(x + w, y, z0 + h), tS = iso(x + w, y + d, z0 + h), tW = iso(x, y + d, z0 + h);
+  const bE = iso(x + w, y, z0), bS = iso(x + w, y + d, z0), bW = iso(x, y + d, z0);
+  poly([tE, tS, bS, bE], right, stroke);   // юго-восточная грань
+  poly([tS, tW, bW, bS], left, stroke);    // юго-западная грань
+  poly([tN, tE, tS, tW], top, stroke);     // верх
+}
+function shadeLines(pts, step, color, horizontal) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath(); ctx.clip();
+  ctx.strokeStyle = color; ctx.lineWidth = 1;
+  const ys = pts.map(p => p[1]), xs = pts.map(p => p[0]);
+  const y0 = Math.min(...ys), y1 = Math.max(...ys), x0 = Math.min(...xs), x1 = Math.max(...xs);
+  ctx.beginPath();
+  if (horizontal) for (let y = y0; y < y1; y += step) { ctx.moveTo(x0, y); ctx.lineTo(x1, y + (x1 - x0) / 2 * 0); }
+  else for (let x = x0; x < x1; x += step) { ctx.moveTo(x, y0); ctx.lineTo(x, y1); }
+  ctx.stroke();
+  ctx.restore();
+}
+
+const GRASS = [["#79b95c", "#6fb052"], ["#68a94b", "#5f9f44"], ["#b3a35a", "#a89852"], ["#e7ecf1", "#dde4ec"]];
+const WALLC = {
+  brick: ["#c9705a", "#b05a45", "#9c4c39"],
+  gasblock: ["#eceada", "#d8d6c5", "#c4c2b1"],
+  timber: ["#cf9a58", "#b98244", "#a37138"],
+  frame: ["#e0d3ac", "#cbbb90", "#b6a67c"]
+};
+const ROOFC = { metal: ["#b0413e", "#8f302e"], soft: ["#5d7a4f", "#49613e"], temp: ["#4a4f57", "#3a3e45"] };
+const FACADEC = { full: ["#f0e6cd", "#dcd0b2", "#c8bb9c"], thin: ["#dfe4e8", "#c9cfd6", "#b5bcc4"], paint: null };
+
+let confetti = [];
+function startConfetti() {
+  confetti = [];
+  for (let i = 0; i < 120; i++) confetti.push({
+    x: Math.random() * CW, y: -20 - Math.random() * 200,
+    vy: 1.5 + Math.random() * 2.5, vx: -1 + Math.random() * 2,
+    c: ["#ff5252", "#ffd740", "#69f0ae", "#40c4ff", "#e040fb"][i % 5], r: 3 + Math.random() * 3
+  });
+}
+
+function progOf(kind, doneFlag) {
+  if (state.flags[doneFlag]) return 1;
+  if (state.job && state.job.kind === kind) return jobProgress();
+  return 0;
+}
+
+function draw() {
+  const t = Date.now();
+  const F = state.flags, C = state.choices;
+  const sIdx = seasonIdx();
+  ctx.clearRect(0, 0, CW, CH);
+
+  // небо
+  const sky = ctx.createLinearGradient(0, 0, 0, 240);
+  if (sIdx === 3) { sky.addColorStop(0, "#b8c8dd"); sky.addColorStop(1, "#dfe8f2"); }
+  else { sky.addColorStop(0, "#8ec9f0"); sky.addColorStop(1, "#cfe9fb"); }
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, CW, CH);
+
+  // солнце и облака
+  ctx.fillStyle = sIdx === 3 ? "#f2f4d9" : "#ffd54d";
+  ctx.beginPath(); ctx.arc(CW - 90, 62, 26, 0, 7); ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,.85)";
+  const cx1 = (t / 90) % (CW + 300) - 150;
+  ctx.beginPath(); ctx.ellipse(cx1, 70, 55, 18, 0, 0, 7); ctx.ellipse(cx1 + 40, 60, 40, 15, 0, 0, 7); ctx.fill();
+  const cx2 = (t / 140 + 500) % (CW + 300) - 150;
+  ctx.beginPath(); ctx.ellipse(cx2, 110, 45, 14, 0, 0, 7); ctx.fill();
+
+  // газон
+  const g = GRASS[sIdx];
+  for (let y = 0; y < 12; y++) for (let x = 0; x < 12; x++) {
+    if (y >= 10) continue;
+    tile(x, y, (x + y) % 2 ? g[0] : g[1]);
+  }
+  // дорога
+  for (let x = 0; x < 12; x++) { tile(x, 10, "#8e8e96"); tile(x, 11, "#83838b"); }
+  ctx.strokeStyle = "#d9d9de"; ctx.setLineDash([10, 12]); ctx.lineWidth = 2;
+  ctx.beginPath();
+  const r1 = iso(0, 11), r2 = iso(12, 11);
+  ctx.moveTo(r1[0], r1[1]); ctx.lineTo(r2[0], r2[1]); ctx.stroke(); ctx.setLineDash([]);
+
+  // дорожка к дому (после отделки)
+  if (F.finishDone) for (let y = HY + HD; y < 10; y++) tile(HX + 2, y, "#cbbfa2");
+
+  // деревья
+  drawTree(1.2, 1.6, sIdx); drawTree(10.4, 2.2, sIdx); drawTree(1.6, 8.0, sIdx);
+
+  // склад материалов: палеты пока идут работы
+  if (state.job && ["walls", "roof", "windows", "facade"].includes(state.job.kind)) {
+    box(10.2, 5.4, 0.9, 0.7, 0, 10, "#caa96d", "#a8894f", "#96793f", "rgba(0,0,0,.15)");
+    box(10.3, 6.4, 0.8, 0.6, 0, 16, "#d7d7cb", "#b9b9ab", "#a3a394", "rgba(0,0,0,.15)");
+  }
+
+  const digP = progOf("dig", "dug");
+  const pourP = progOf("pour", "foundationDone");
+  const wallP = progOf("walls", "wallsDone");
+  const roofP = progOf("roof", "roofDone");
+  const winP = progOf("windows", "windowsDone");
+  const facP = progOf("facade", "facadeDone");
+
+  // котлован
+  if (digP > 0 && pourP < 1 && C.foundation !== "piles") {
+    const depth = 14 * digP;
+    poly([iso(HX, HY), iso(HX + HW, HY), iso(HX + HW, HY + HD), iso(HX, HY + HD)], "#7a5a3c");
+    poly([iso(HX + .3, HY + .3, -depth + 6), iso(HX + HW - .3, HY + .3, -depth + 6), iso(HX + HW - .3, HY + HD - .3, -depth + 6), iso(HX + .3, HY + HD - .3, -depth + 6)], "#5d4128");
+    // отвал грунта
+    ctx.fillStyle = "#8a684a";
+    const m = iso(HX + HW + 0.8, HY + 1.2);
+    ctx.beginPath(); ctx.ellipse(m[0], m[1], 34 * digP, 16 * digP, 0, 0, 7); ctx.fill();
+  }
+
+  // фундамент
+  if (pourP > 0) {
+    const fid = C.foundation;
+    if (fid === "piles") {
+      const n = Math.max(1, Math.round(9 * pourP));
+      let k = 0;
+      for (let iy = 0; iy < 3; iy++) for (let ixp = 0; ixp < 3; ixp++) {
+        if (k++ >= n) break;
+        box(HX + 0.3 + ixp * (HW - 0.9) / 2, HY + 0.3 + iy * (HD - 0.9) / 2, 0.25, 0.25, 0, 20, "#9aa3b2", "#7d8794", "#6b7382");
+      }
+      if (pourP >= 1) box(HX, HY, HW, HD, 20, 6, "#aab3c0", "#8d97a6", "#7b8494", "rgba(0,0,0,.12)");
+    } else {
+      const h = FOUND_H * pourP;
+      box(HX, HY, HW, HD, 0, h, "#b9c0cc", "#98a1b0", "#868f9e", "rgba(0,0,0,.12)");
+      if (fid !== "slab" && pourP >= 1)
+        poly([iso(HX + .7, HY + .7, h), iso(HX + HW - .7, HY + .7, h), iso(HX + HW - .7, HY + HD - .7, h), iso(HX + .7, HY + HD - .7, h)], "#77604a");
+      // мокрый блеск свежего бетона
+      if (state.job && (state.job.kind === "pour" || state.job.kind === "cure")) {
+        ctx.globalAlpha = 0.25 + 0.15 * Math.sin(t / 300);
+        poly([iso(HX, HY, h), iso(HX + HW, HY, h), iso(HX + HW, HY + HD, h), iso(HX, HY + HD, h)], "#ffffff");
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+
+  const baseZ = C.foundation === "piles" ? 26 : FOUND_H;
+
+  // стены
+  if (wallP > 0) {
+    const wc = WALLC[C.walls] || WALLC.gasblock;
+    const fc = F.facadeDone && FACADEC[C.facade] ? FACADEC[C.facade] : null;
+    const h = WALL_H * wallP;
+    const cols = fc && facP >= 1 ? fc : wc;
+    box(HX, HY, HW, HD, baseZ, h, cols[0], cols[1], cols[2], "rgba(0,0,0,.14)");
+    // фактура стен
+    const tS = iso(HX + HW, HY + HD, baseZ + h), tW = iso(HX, HY + HD, baseZ + h), tE = iso(HX + HW, HY, baseZ + h);
+    const bS = iso(HX + HW, HY + HD, baseZ), bW = iso(HX, HY + HD, baseZ), bE = iso(HX + HW, HY, baseZ);
+    if (!fc || facP < 1) {
+      const lineC = "rgba(0,0,0,.13)";
+      if (C.walls === "brick" || C.walls === "timber") {
+        for (let z = baseZ + 7; z < baseZ + h; z += C.walls === "brick" ? 7 : 11) {
+          ctx.strokeStyle = lineC; ctx.beginPath();
+          let a = iso(HX + HW, HY + HD, z), b = iso(HX, HY + HD, z);
+          ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+          a = iso(HX + HW, HY, z); b = iso(HX + HW, HY + HD, z);
+          ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+          ctx.stroke();
+        }
+      } else if (C.walls === "gasblock") {
+        for (let z = baseZ + 14; z < baseZ + h; z += 14) {
+          ctx.strokeStyle = lineC; ctx.beginPath();
+          let a = iso(HX + HW, HY + HD, z), b = iso(HX, HY + HD, z);
+          ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+          a = iso(HX + HW, HY, z); b = iso(HX + HW, HY + HD, z);
+          ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+          ctx.stroke();
+        }
+      } else if (C.walls === "frame" && wallP < 0.65) {
+        shadeLines([tS, tW, bW, bS], 12, "rgba(90,60,20,.4)");
+        shadeLines([tE, tS, bS, bE], 12, "rgba(90,60,20,.4)");
+      }
+      // армопояс — светлая лента поверх газобетона
+      if (C.walls === "gasblock" && C.armo && wallP >= 1) {
+        box(HX, HY, HW, HD, baseZ + h - 7, 7, "#b9c0cc", "#98a1b0", "#868f9e");
+      }
+    }
+  }
+
+  // окна и дверь (на юго-восточной и юго-западной гранях)
+  if (winP > 0 && wallP >= 1) {
+    const glow = F.finishDone ? "#ffe9b0" : "#bfe3ff";
+    const items = [
+      () => wallQuadSW(1.0, 1.9, 26, 52, glow, "#5b7d99"),
+      () => wallQuadSW(2.6, 3.5, 26, 52, glow, "#5b7d99"),
+      () => wallQuadSE(0.8, 1.6, 26, 52, glow, "#5b7d99"),
+      () => { wallQuadSE(2.2, 3.0, 4, 56, "#8a5a33", "#5f3d20"); },  // дверь
+      () => wallQuadSW(4.0, 4.6, 26, 48, glow, "#5b7d99")
+    ];
+    const n = Math.max(1, Math.round(items.length * winP));
+    for (let i = 0; i < n && i < items.length; i++) items[i]();
+  }
+
+  // крыша
+  if (roofP > 0) {
+    const rc = ROOFC[C.roof] || ROOFC.metal;
+    const zTop = baseZ + WALL_H;
+    const R1 = iso(HX, HY + HD / 2, zTop + ROOF_H), R2 = iso(HX + HW, HY + HD / 2, zTop + ROOF_H);
+    const eF1 = iso(HX - 0.25, HY + HD + 0.25, zTop - 4), eF2 = iso(HX + HW + 0.25, HY + HD + 0.25, zTop - 4);
+    const eB1 = iso(HX - 0.25, HY - 0.25, zTop - 4), eB2 = iso(HX + HW + 0.25, HY - 0.25, zTop - 4);
+    if (roofP < 0.45) {
+      // стропила
+      const k = roofP / 0.45;
+      ctx.strokeStyle = "#8a6a45"; ctx.lineWidth = 3;
+      const n = Math.max(1, Math.round(6 * k));
+      for (let i = 0; i < n; i++) {
+        const u = i / 5;
+        const f = [eF1[0] + (eF2[0] - eF1[0]) * u, eF1[1] + (eF2[1] - eF1[1]) * u];
+        const r = [R1[0] + (R2[0] - R1[0]) * u, R1[1] + (R2[1] - R1[1]) * u];
+        const b = [eB1[0] + (eB2[0] - eB1[0]) * u, eB1[1] + (eB2[1] - eB1[1]) * u];
+        ctx.beginPath(); ctx.moveTo(f[0], f[1]); ctx.lineTo(r[0], r[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+      }
+      ctx.lineWidth = 1;
+    } else {
+      const a = Math.min(1, (roofP - 0.45) / 0.55);
+      ctx.globalAlpha = a;
+      poly([eB1, eB2, R2, R1], rc[1]);                       // задний скат
+      poly([eF1, eF2, R2, R1], rc[0], "rgba(0,0,0,.18)");    // передний скат
+      // фронтон справа
+      const gE = iso(HX + HW, HY, zTop), gS = iso(HX + HW, HY + HD, zTop);
+      const wcol = (F.facadeDone && FACADEC[C.facade]) ? FACADEC[C.facade][1] : (WALLC[C.walls] || WALLC.gasblock)[1];
+      poly([gE, gS, R2], wcol, "rgba(0,0,0,.15)");
+      if (C.roof === "metal" && a > 0.7) {
+        ctx.strokeStyle = "rgba(255,255,255,.25)";
+        for (let i = 1; i < 6; i++) {
+          const u = i / 6;
+          ctx.beginPath();
+          ctx.moveTo(eF1[0] + (eF2[0] - eF1[0]) * u, eF1[1] + (eF2[1] - eF1[1]) * u);
+          ctx.lineTo(R1[0] + (R2[0] - R1[0]) * u, R1[1] + (R2[1] - R1[1]) * u);
+          ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = 1;
+      // труба + дым после инженерки
+      if (F.engDone) {
+        box(HX + HW - 1.2, HY + 1.0, 0.4, 0.4, zTop + ROOF_H - 22, 34, "#a8756a", "#8d5c52", "#7a4d44");
+        ctx.strokeStyle = "rgba(220,228,238,.8)"; ctx.lineWidth = 4; ctx.lineCap = "round";
+        const sm = iso(HX + HW - 1.0, HY + 1.2, zTop + ROOF_H + 14);
+        ctx.beginPath();
+        const ph2 = t / 400;
+        ctx.moveTo(sm[0], sm[1]);
+        ctx.quadraticCurveTo(sm[0] - 8 + Math.sin(ph2) * 4, sm[1] - 14, sm[0] + Math.sin(ph2 + 1) * 6, sm[1] - 26);
+        ctx.stroke(); ctx.lineWidth = 1; ctx.lineCap = "butt";
+      }
+    }
+  }
+
+  // трещины
+  if (F.cracked && wallP > 0.5) {
+    ctx.strokeStyle = "rgba(40,30,20,.55)"; ctx.lineWidth = 1.6;
+    const b1 = iso(HX + 1.1, HY + HD, baseZ + 2);
+    ctx.beginPath(); ctx.moveTo(b1[0], b1[1]);
+    ctx.lineTo(b1[0] + 5, b1[1] - 16); ctx.lineTo(b1[0] - 2, b1[1] - 26); ctx.lineTo(b1[0] + 6, b1[1] - 40);
+    ctx.stroke();
+    const b2 = iso(HX + HW, HY + 1.3, baseZ + 2);
+    ctx.beginPath(); ctx.moveTo(b2[0], b2[1]);
+    ctx.lineTo(b2[0] - 4, b2[1] - 14); ctx.lineTo(b2[0] + 3, b2[1] - 24);
+    ctx.stroke(); ctx.lineWidth = 1;
+  }
+
+  // благоустройство после отделки
+  if (F.finishDone) {
+    drawFlower(HX - 0.6, HY + HD + 0.5); drawFlower(HX + HW + 0.5, HY + HD + 0.3); drawFlower(HX - 0.9, HY + 1.5);
+  }
+
+  // рабочие
+  if (state.job && !["cure", "shrinkWait", "surveyJob"].includes(state.job.kind)) {
+    drawWorker(HX + 1.2, HY + HD + 0.7, t, 0);
+    drawWorker(HX + 3.6, HY + HD + 0.9, t, 1);
+    if (state.job.kind === "dig") drawExcavator(HX + HW + 1.3, HY + 2.2);
+    if (state.job.kind === "pour") drawMixer(HX + HW + 1.1, HY + 3.3, t);
+  }
+  if (state.job && state.job.kind === "surveyJob" && state.choices.survey === "geo") {
+    drawWorker(HX + 2, HY + 2, t, 0);
+    ctx.strokeStyle = "#555"; ctx.lineWidth = 3;
+    const dpos = iso(HX + 2.4, HY + 2.2, 0);
+    ctx.beginPath(); ctx.moveTo(dpos[0], dpos[1]); ctx.lineTo(dpos[0], dpos[1] - 40 - Math.sin(t / 150) * 4); ctx.stroke();
+    ctx.lineWidth = 1;
+  }
+
+  // бейдж таймера над домом (бетон/усадка)
+  if (state.job && (state.job.kind === "cure" || state.job.kind === "shrinkWait")) {
+    const c = iso(HX + HW / 2, HY + HD / 2, baseZ + WALL_H + ROOF_H + 30);
+    const label = (state.job.kind === "cure" ? "🕐 Бетон зреет · " : "⏳ Усадка · ") + fmtMin(state.job.end - t);
+    ctx.font = "600 14px system-ui, sans-serif";
+    const w = ctx.measureText(label).width + 20;
+    ctx.fillStyle = "rgba(20,26,40,.85)";
+    const bob = Math.sin(t / 400) * 4;
+    ctx.beginPath(); ctx.roundRect(c[0] - w / 2, c[1] - 16 + bob, w, 26, 13); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.textAlign = "center";
+    ctx.fillText(label, c[0], c[1] + 2 + bob); ctx.textAlign = "left";
+  }
+
+  // дождь / снег
+  if (state.rainUntil > t) {
+    if (sIdx === 3) {
+      ctx.fillStyle = "rgba(255,255,255,.9)";
+      for (let i = 0; i < 90; i++) {
+        const x = (i * 97 + t / 8) % CW, y = (i * 61 + t / 6) % CH;
+        ctx.beginPath(); ctx.arc(x, y, 2, 0, 7); ctx.fill();
+      }
+    } else {
+      ctx.strokeStyle = "rgba(120,160,220,.55)"; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let i = 0; i < 110; i++) {
+        const x = (i * 89 + t / 2.2) % (CW + 60) - 30, y = (i * 53 + t / 1.6) % CH;
+        ctx.moveTo(x, y); ctx.lineTo(x - 5, y + 14);
+      }
+      ctx.stroke(); ctx.lineWidth = 1;
+    }
+    // туча
+    ctx.fillStyle = "rgba(90,100,115,.85)";
+    ctx.beginPath(); ctx.ellipse(CW / 2, 46, 90, 24, 0, 0, 7); ctx.ellipse(CW / 2 + 70, 56, 60, 20, 0, 0, 7); ctx.ellipse(CW / 2 - 80, 58, 55, 18, 0, 0, 7); ctx.fill();
+  }
+
+  // конфетти
+  if (confetti.length) {
+    for (const c of confetti) {
+      c.y += c.vy; c.x += c.vx;
+      ctx.fillStyle = c.c;
+      ctx.fillRect(c.x, c.y, c.r, c.r * 1.6);
+    }
+    confetti = confetti.filter(c => c.y < CH + 20);
+  }
+
+  requestAnimationFrame(draw);
+}
+
+/* прямоугольник на юго-западной грани (фасад, смотрит влево-вниз): u — позиция вдоль стены, z0/h — высота */
+function wallQuadSW(u0, u1, zOff, h, fill, stroke) {
+  const baseZ = (state.choices.foundation === "piles" ? 26 : FOUND_H);
+  const a0 = iso(HX + HW - u0, HY + HD, baseZ + zOff), a1 = iso(HX + HW - u1, HY + HD, baseZ + zOff);
+  const b1 = iso(HX + HW - u1, HY + HD, baseZ + zOff + h), b0 = iso(HX + HW - u0, HY + HD, baseZ + zOff + h);
+  poly([a0, a1, b1, b0], fill, stroke);
+}
+function wallQuadSE(u0, u1, zOff, h, fill, stroke) {
+  const baseZ = (state.choices.foundation === "piles" ? 26 : FOUND_H);
+  const a0 = iso(HX + HW, HY + u0, baseZ + zOff), a1 = iso(HX + HW, HY + u1, baseZ + zOff);
+  const b1 = iso(HX + HW, HY + u1, baseZ + zOff + h), b0 = iso(HX + HW, HY + u0, baseZ + zOff + h);
+  poly([a0, a1, b1, b0], fill, stroke);
+}
+
+function drawTree(x, y, sIdx) {
+  const p = iso(x, y, 0);
+  ctx.fillStyle = "#7a5230"; ctx.fillRect(p[0] - 3, p[1] - 30, 6, 30);
+  ctx.fillStyle = sIdx === 2 ? "#c98d3a" : sIdx === 3 ? "#4e7a5a" : "#4e8f3c";
+  ctx.beginPath(); ctx.arc(p[0], p[1] - 42, 18, 0, 7); ctx.arc(p[0] - 12, p[1] - 30, 13, 0, 7); ctx.arc(p[0] + 12, p[1] - 30, 13, 0, 7); ctx.fill();
+  if (sIdx === 3) { ctx.fillStyle = "rgba(255,255,255,.8)"; ctx.beginPath(); ctx.arc(p[0], p[1] - 52, 12, 3.4, 6.1); ctx.fill(); }
+}
+function drawFlower(x, y) {
+  const p = iso(x, y, 0);
+  ctx.fillStyle = "#4c7a3f"; ctx.fillRect(p[0] - 1, p[1] - 10, 2, 10);
+  ctx.fillStyle = ["#d9646a", "#e2a13c", "#c364c9"][Math.floor((x * 7 + y * 13) % 3)];
+  ctx.beginPath(); ctx.arc(p[0], p[1] - 12, 5, 0, 7); ctx.fill();
+}
+function drawWorker(x, y, t, i) {
+  const p = iso(x, y, 0);
+  const bob = Math.sin(t / 180 + i * 2) * 2.5;
+  ctx.fillStyle = "#3d4552"; ctx.fillRect(p[0] - 4, p[1] - 12, 3.4, 12); ctx.fillRect(p[0] + 0.6, p[1] - 12, 3.4, 12);
+  ctx.fillStyle = "#f28c28"; ctx.beginPath(); ctx.roundRect(p[0] - 6, p[1] - 26 + bob, 12, 15, 4); ctx.fill();
+  ctx.fillStyle = "#e8b88a"; ctx.beginPath(); ctx.arc(p[0], p[1] - 31 + bob, 5, 0, 7); ctx.fill();
+  ctx.fillStyle = "#ffd23c"; ctx.beginPath(); ctx.arc(p[0], p[1] - 33 + bob, 5.4, Math.PI, 0); ctx.fill();
+  // молоток
+  ctx.strokeStyle = "#6b4a2a"; ctx.lineWidth = 2.4;
+  const ang = Math.sin(t / 180 + i * 2) * 0.9 - 0.5;
+  ctx.beginPath(); ctx.moveTo(p[0] + 6, p[1] - 20 + bob);
+  ctx.lineTo(p[0] + 6 + Math.cos(ang) * 11, p[1] - 20 + bob + Math.sin(ang) * 11); ctx.stroke();
+  ctx.lineWidth = 1;
+}
+function drawExcavator(x, y) {
+  const p = iso(x, y, 0);
+  ctx.fillStyle = "#e2a13c";
+  ctx.beginPath(); ctx.roundRect(p[0] - 20, p[1] - 26, 40, 18, 4); ctx.fill();
+  ctx.fillStyle = "#c9882b"; ctx.beginPath(); ctx.roundRect(p[0] - 4, p[1] - 40, 18, 15, 3); ctx.fill();
+  ctx.fillStyle = "#3d4552"; ctx.beginPath(); ctx.roundRect(p[0] - 24, p[1] - 10, 48, 9, 4.5); ctx.fill();
+  ctx.strokeStyle = "#c9882b"; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.moveTo(p[0] - 18, p[1] - 30); ctx.lineTo(p[0] - 40, p[1] - 44); ctx.lineTo(p[0] - 52, p[1] - 26); ctx.stroke();
+  ctx.fillStyle = "#8a8f98"; ctx.beginPath(); ctx.arc(p[0] - 54, p[1] - 22, 7, 0, 7); ctx.fill();
+  ctx.lineWidth = 1;
+}
+function drawMixer(x, y, t) {
+  const p = iso(x, y, 0);
+  ctx.fillStyle = "#5a7fbf"; ctx.beginPath(); ctx.roundRect(p[0] - 26, p[1] - 24, 24, 16, 3); ctx.fill();
+  ctx.save();
+  ctx.translate(p[0] + 8, p[1] - 24); ctx.rotate(Math.sin(t / 200) * 0.08);
+  ctx.fillStyle = "#d9d9de"; ctx.beginPath(); ctx.ellipse(0, 0, 16, 11, -0.3, 0, 7); ctx.fill();
+  ctx.strokeStyle = "#a9a9b0"; ctx.beginPath(); ctx.ellipse(0, 0, 16, 11, -0.3, 0, 7); ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle = "#3d4552";
+  for (const dx of [-18, -4, 12]) { ctx.beginPath(); ctx.arc(p[0] + dx, p[1] - 5, 5, 0, 7); ctx.fill(); }
+}
+
+/* ================= запуск ================= */
+
+Object.defineProperty(window, "G", { get: () => state });
+
+(function init() {
+  const loaded = load();
+  if (loaded) {
+    state = loaded;
+    loading = true;
+    const awayFor = Date.now() - (state.lastSeen || Date.now());
+    while (state.job && Date.now() >= state.job.end) completeJob();
+    loading = false;
+    if (awayFor > 45000 && awayList.length) showAway();
+    if (state.phase === "done" && !awayList.length) { /* достроенный дом просто показываем */ }
+  } else {
+    state = freshState();
+    log("Вы купили участок 10 соток. Бюджет — " + fmtMoney(state.money) + ". Постройте дом без ошибок!", "");
+    save();
+  }
+  renderLog();
+  renderPanel();
+  updateHud();
+  setInterval(tick, 300);
+  requestAnimationFrame(draw);
+})();
 </script>
 </body>
 </html>
