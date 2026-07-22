@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Адвокатская коллегия «Фемида» — квалифицированная юридическая помощь</title>
+<meta name="description" content="Адвокатская коллегия «Фемида»: защита по уголовным делам, гражданские и арбитражные споры, семейное право, недвижимость, банкротство. Запишитесь на консультацию.">
+<style>
+  :root{
+    --navy:#0f2439;
+    --navy-2:#16324f;
+    --gold:#b8924a;
+    --gold-2:#d8b978;
+    --ink:#1c2632;
+    --muted:#5c6b7a;
+    --line:#e3e7ec;
+    --bg:#ffffff;
+    --bg-soft:#f6f8fa;
+    --bg-soft-2:#eef2f6;
+    --white:#ffffff;
+    --radius:14px;
+    --shadow:0 10px 30px rgba(15,36,57,.08);
+    --shadow-lg:0 24px 60px rgba(15,36,57,.16);
+    --serif:"Georgia","Times New Roman",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --maxw:1120px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    font-family:var(--sans);
+    color:var(--ink);
+    background:var(--bg);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{font-family:var(--serif);line-height:1.2;color:var(--navy);font-weight:700;margin:0}
+  a{color:inherit}
+  img{max-width:100%}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 22px}
+  .eyebrow{
+    display:inline-block;
+    font-size:13px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--gold);font-weight:700;margin-bottom:14px;
+  }
+  .btn{
+    display:inline-flex;align-items:center;gap:9px;
+    font-weight:600;font-size:15px;
+    padding:13px 24px;border-radius:10px;
+    text-decoration:none;cursor:pointer;border:1px solid transparent;
+    transition:transform .15s ease, box-shadow .15s ease, background .15s ease, color .15s ease;
+    white-space:nowrap;
+  }
+  .btn-gold{background:linear-gradient(135deg,var(--gold),var(--gold-2));color:#2a2007;box-shadow:0 8px 20px rgba(184,146,74,.35)}
+  .btn-gold:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(184,146,74,.45)}
+  .btn-ghost{background:transparent;border-color:rgba(255,255,255,.35);color:#fff}
+  .btn-ghost:hover{background:rgba(255,255,255,.1)}
+  .btn-outline{background:#fff;border-color:var(--navy);color:var(--navy)}
+  .btn-outline:hover{background:var(--navy);color:#fff}
+
+  /* ===== Header ===== */
+  header.site{
+    position:sticky;top:0;z-index:50;
+    background:rgba(15,36,57,.96);
+    backdrop-filter:saturate(140%) blur(8px);
+    border-bottom:1px solid rgba(255,255,255,.08);
+  }
+  .nav{display:flex;align-items:center;justify-content:space-between;height:70px;gap:16px}
+  .brand{display:flex;align-items:center;gap:12px;text-decoration:none;color:#fff}
+  .brand .mark{
+    width:42px;height:42px;flex:0 0 42px;border-radius:9px;
+    display:grid;place-items:center;
+    background:linear-gradient(135deg,var(--gold),var(--gold-2));
+    color:#2a2007;font-family:var(--serif);font-weight:700;font-size:22px;
+  }
+  .brand b{font-family:var(--serif);font-size:18px;font-weight:700;letter-spacing:.02em;line-height:1.1}
+  .brand span{display:block;font-family:var(--sans);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-2);font-weight:600}
+  .menu{display:flex;gap:26px;list-style:none;margin:0;padding:0}
+  .menu a{color:#d7dee6;text-decoration:none;font-size:15px;font-weight:500;transition:color .15s}
+  .menu a:hover{color:#fff}
+  .nav-cta{display:flex;align-items:center;gap:14px}
+  .nav-phone{color:#fff;text-decoration:none;font-weight:600;font-size:15px;white-space:nowrap}
+  .nav-phone small{display:block;font-size:11px;color:var(--gold-2);font-weight:600;letter-spacing:.08em}
+  .burger{display:none;background:none;border:0;cursor:pointer;padding:8px;flex:0 0 auto}
+  .burger span{display:block;width:24px;height:2px;background:#fff;margin:5px 0;transition:.25s}
+
+  /* ===== Hero ===== */
+  .hero{
+    position:relative;color:#fff;
+    background:
+      linear-gradient(180deg,rgba(9,22,36,.86),rgba(9,22,36,.92)),
+      radial-gradient(1200px 500px at 80% -10%,rgba(184,146,74,.25),transparent 60%),
+      var(--navy);
+    overflow:hidden;
+  }
+  .hero::after{
+    content:"§";position:absolute;right:-40px;bottom:-90px;
+    font-family:var(--serif);font-size:420px;line-height:1;
+    color:rgba(255,255,255,.04);pointer-events:none;
+  }
+  .hero .wrap{position:relative;z-index:1;padding:96px 22px 104px;max-width:900px}
+  .hero h1{color:#fff;font-size:clamp(34px,5vw,56px);margin-bottom:22px}
+  .hero p.lead{font-size:clamp(17px,2.2vw,21px);color:#cdd7e1;max-width:640px;margin:0 0 34px}
+  .hero-actions{display:flex;gap:14px;flex-wrap:wrap}
+  .hero-stats{display:flex;gap:40px;flex-wrap:wrap;margin-top:56px;padding-top:34px;border-top:1px solid rgba(255,255,255,.12)}
+  .hero-stats .s b{display:block;font-family:var(--serif);font-size:34px;color:var(--gold-2)}
+  .hero-stats .s span{font-size:14px;color:#aab7c4}
+
+  /* ===== Sections ===== */
+  section{padding:82px 0}
+  .section-head{max-width:720px;margin:0 auto 48px;text-align:center}
+  .section-head h2{font-size:clamp(27px,3.4vw,38px);margin-bottom:14px}
+  .section-head p{color:var(--muted);font-size:17px;margin:0}
+  .soft{background:var(--bg-soft)}
+
+  /* Practices */
+  .grid{display:grid;gap:20px}
+  .practices{grid-template-columns:repeat(3,1fr)}
+  .card{
+    background:#fff;border:1px solid var(--line);border-radius:var(--radius);
+    padding:28px 26px;transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  }
+  .card:hover{transform:translateY(-4px);box-shadow:var(--shadow);border-color:#d3dae1}
+  .card .ic{
+    width:52px;height:52px;border-radius:12px;display:grid;place-items:center;
+    background:var(--bg-soft-2);color:var(--navy);margin-bottom:18px;
+    font-size:26px;
+  }
+  .card h3{font-size:20px;margin-bottom:10px}
+  .card p{color:var(--muted);font-size:15px;margin:0}
+
+  /* Why us */
+  .why-grid{grid-template-columns:1.05fr .95fr;align-items:center;gap:52px}
+  .why-list{list-style:none;padding:0;margin:26px 0 0;display:grid;gap:20px}
+  .why-list li{display:flex;gap:16px}
+  .why-list .num{
+    flex:0 0 44px;height:44px;border-radius:10px;display:grid;place-items:center;
+    background:linear-gradient(135deg,var(--gold),var(--gold-2));color:#2a2007;
+    font-family:var(--serif);font-weight:700;font-size:19px;
+  }
+  .why-list h3{font-size:18px;margin-bottom:3px}
+  .why-list p{margin:0;color:var(--muted);font-size:15px}
+  .why-panel{
+    background:linear-gradient(160deg,var(--navy),var(--navy-2));
+    color:#fff;border-radius:18px;padding:40px 36px;box-shadow:var(--shadow-lg);
+  }
+  .why-panel h3{color:#fff;font-size:23px;margin-bottom:8px}
+  .why-panel p{color:#c3ced9;font-size:15px}
+  .why-panel .quote{
+    font-family:var(--serif);font-size:20px;font-style:italic;color:#e7edf3;
+    border-left:3px solid var(--gold);padding-left:18px;margin:22px 0 0;line-height:1.5;
+  }
+
+  /* Team */
+  .team{grid-template-columns:repeat(3,1fr)}
+  .lawyer{
+    background:#fff;border:1px solid var(--line);border-radius:var(--radius);
+    overflow:hidden;text-align:center;transition:transform .18s ease, box-shadow .18s ease;
+  }
+  .lawyer:hover{transform:translateY(-4px);box-shadow:var(--shadow)}
+  .lawyer .photo{
+    height:180px;display:grid;place-items:center;
+    background:linear-gradient(160deg,var(--navy),var(--navy-2));
+    color:var(--gold-2);font-family:var(--serif);font-size:52px;font-weight:700;
+  }
+  .lawyer .body{padding:22px 20px 26px}
+  .lawyer h3{font-size:19px;margin-bottom:4px}
+  .lawyer .role{color:var(--gold);font-weight:600;font-size:14px;margin-bottom:12px}
+  .lawyer p{color:var(--muted);font-size:14px;margin:0}
+  .lawyer .exp{display:inline-block;margin-top:14px;font-size:13px;color:var(--navy);background:var(--bg-soft-2);padding:5px 12px;border-radius:20px;font-weight:600}
+
+  /* CTA band */
+  .band{
+    background:linear-gradient(120deg,var(--navy),var(--navy-2));color:#fff;
+    border-radius:20px;padding:52px 48px;
+    display:flex;align-items:center;justify-content:space-between;gap:30px;flex-wrap:wrap;
+    box-shadow:var(--shadow-lg);
+  }
+  .band h2{color:#fff;font-size:clamp(24px,3vw,32px);max-width:560px}
+  .band p{color:#c3ced9;margin:10px 0 0;max-width:560px}
+
+  /* Contact + form */
+  .contact-grid{grid-template-columns:1fr 1fr;gap:44px;align-items:start}
+  .info-list{list-style:none;padding:0;margin:26px 0 0;display:grid;gap:22px}
+  .info-list li{display:flex;gap:16px}
+  .info-list .ic{
+    flex:0 0 46px;height:46px;border-radius:11px;display:grid;place-items:center;
+    background:var(--bg-soft-2);color:var(--navy);font-size:22px;
+  }
+  .info-list b{display:block;font-size:15px;color:var(--navy)}
+  .info-list span,.info-list a{color:var(--muted);font-size:15px;text-decoration:none}
+  .info-list a:hover{color:var(--gold)}
+  .form{
+    background:#fff;border:1px solid var(--line);border-radius:18px;
+    padding:34px 32px;box-shadow:var(--shadow);
+  }
+  .form h3{font-size:22px;margin-bottom:6px}
+  .form .sub{color:var(--muted);font-size:14px;margin:0 0 22px}
+  .field{margin-bottom:16px}
+  .field label{display:block;font-size:14px;font-weight:600;color:var(--navy);margin-bottom:6px}
+  .field .req{color:#c0392b}
+  .field input,.field select,.field textarea{
+    width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;
+    font-size:15px;font-family:inherit;color:var(--ink);background:#fdfefe;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .field input:focus,.field select:focus,.field textarea:focus{
+    outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(184,146,74,.15);
+  }
+  .field textarea{resize:vertical;min-height:96px}
+  .field.err input,.field.err select,.field.err textarea{border-color:#c0392b;box-shadow:0 0 0 3px rgba(192,57,43,.12)}
+  .field .msg{display:none;color:#c0392b;font-size:13px;margin-top:5px}
+  .field.err .msg{display:block}
+  .form .btn{width:100%;justify-content:center;margin-top:6px}
+  .consent{font-size:12.5px;color:var(--muted);margin:14px 0 0;line-height:1.5}
+  .consent a{color:var(--gold)}
+  .form-note{
+    display:none;margin-top:18px;padding:14px 16px;border-radius:10px;
+    background:#eaf6ee;border:1px solid #bfe3cb;color:#1e6b3a;font-size:14px;
+  }
+  .form-note.show{display:block}
+
+  /* Footer */
+  footer.site{background:var(--navy);color:#c3ced9;padding:54px 0 28px}
+  .foot-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:32px;margin-bottom:32px}
+  footer.site h4{color:#fff;font-family:var(--sans);font-size:14px;letter-spacing:.1em;text-transform:uppercase;margin:0 0 16px}
+  footer.site a{color:#c3ced9;text-decoration:none;font-size:15px}
+  footer.site a:hover{color:var(--gold-2)}
+  .foot-links{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+  .foot-about p{font-size:14px;color:#9fb0be;margin:12px 0 0;max-width:340px}
+  .foot-bottom{border-top:1px solid rgba(255,255,255,.1);padding-top:22px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:13px;color:#8496a6}
+  .disclaimer{max-width:var(--maxw);margin:18px auto 0;padding:0 22px;font-size:12px;color:#7c8fa0}
+
+  /* Responsive */
+  @media (max-width:940px){
+    .practices,.team{grid-template-columns:repeat(2,1fr)}
+    .why-grid{grid-template-columns:1fr;gap:34px}
+    .contact-grid{grid-template-columns:1fr;gap:32px}
+    .foot-grid{grid-template-columns:1fr 1fr}
+  }
+  @media (max-width:720px){
+    .menu,.nav-phone{display:none}
+    .burger{display:block}
+    .menu.open{
+      display:flex;position:absolute;top:70px;left:0;right:0;flex-direction:column;
+      background:var(--navy-2);padding:18px 22px;gap:4px;border-bottom:1px solid rgba(255,255,255,.1);
+    }
+    .menu.open a{padding:11px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+    section{padding:60px 0}
+    .band{padding:38px 28px}
+    .hero .wrap{padding:70px 22px 76px}
+    .hero-stats{gap:28px}
+  }
+  @media (max-width:520px){
+    .practices,.team,.foot-grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ HEADER ============ -->
+<header class="site">
+  <div class="wrap nav">
+    <a href="#top" class="brand" aria-label="На главную">
+      <span class="mark">Ф</span>
+      <span><b>Фемида</b><span>Адвокатская коллегия</span></span>
+    </a>
+    <ul class="menu" id="menu">
+      <li><a href="#practices">Практики</a></li>
+      <li><a href="#why">Почему мы</a></li>
+      <li><a href="#team">Адвокаты</a></li>
+      <li><a href="#contacts">Контакты</a></li>
+    </ul>
+    <div class="nav-cta">
+      <a class="nav-phone" href="tel:+70000000000">+7 (000) 000-00-00<small>ЕЖЕДНЕВНО 9:00–20:00</small></a>
+      <a class="btn btn-gold" href="#zayavka">Записаться</a>
+      <button class="burger" id="burger" aria-label="Меню"><span></span><span></span><span></span></button>
+    </div>
+  </div>
+</header>
+
+<a id="top"></a>
+
+<!-- ============ HERO ============ -->
+<section class="hero" style="padding:0">
+  <div class="wrap">
+    <span class="eyebrow">Защита прав с 2005 года</span>
+    <h1>Квалифицированная юридическая помощь, которой можно доверять</h1>
+    <p class="lead">Адвокатская коллегия «Фемида» защищает интересы граждан и бизнеса
+      в судах любой инстанции. Мы берёмся за сложные дела и доводим их до результата.</p>
+    <div class="hero-actions">
+      <a class="btn btn-gold" href="#zayavka">Бесплатная консультация</a>
+      <a class="btn btn-ghost" href="#practices">Наши практики</a>
+    </div>
+    <div class="hero-stats">
+      <div class="s"><b>19</b><span>лет практики</span></div>
+      <div class="s"><b>2&nbsp;400+</b><span>выигранных дел</span></div>
+      <div class="s"><b>12</b><span>адвокатов в команде</span></div>
+      <div class="s"><b>94%</b><span>дел с положительным исходом</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRACTICES ============ -->
+<section id="practices">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Направления</span>
+      <h2>Практики коллегии</h2>
+      <p>Ведём дела в ключевых отраслях права. Подберём адвоката с профильным опытом
+        именно под вашу ситуацию.</p>
+    </div>
+    <div class="grid practices">
+      <article class="card">
+        <div class="ic">⚖️</div>
+        <h3>Уголовная защита</h3>
+        <p>Защита на следствии и в суде, обжалование, работа по особо тяжким и
+          экономическим составам.</p>
+      </article>
+      <article class="card">
+        <div class="ic">📄</div>
+        <h3>Гражданские споры</h3>
+        <p>Взыскание долгов, споры по договорам, возмещение ущерба, защита прав
+          потребителей.</p>
+      </article>
+      <article class="card">
+        <div class="ic">🏛️</div>
+        <h3>Арбитраж и бизнес</h3>
+        <p>Корпоративные конфликты, налоговые споры, сопровождение сделок и
+          представительство в арбитраже.</p>
+      </article>
+      <article class="card">
+        <div class="ic">👪</div>
+        <h3>Семейное право</h3>
+        <p>Расторжение брака, раздел имущества, споры о детях, алименты, брачные
+          договоры.</p>
+      </article>
+      <article class="card">
+        <div class="ic">🏠</div>
+        <h3>Недвижимость и земля</h3>
+        <p>Сделки, оспаривание прав, споры с застройщиками, узаконивание построек,
+          земельные вопросы.</p>
+      </article>
+      <article class="card">
+        <div class="ic">🧾</div>
+        <h3>Банкротство</h3>
+        <p>Списание долгов физических лиц, сопровождение процедур, защита от
+          субсидиарной ответственности.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ WHY US ============ -->
+<section id="why" class="soft">
+  <div class="wrap">
+    <div class="grid why-grid">
+      <div>
+        <span class="eyebrow">Почему выбирают нас</span>
+        <h2 style="font-size:clamp(27px,3.4vw,38px)">Работаем на результат, а не на процесс</h2>
+        <ul class="why-list">
+          <li>
+            <span class="num">1</span>
+            <div><h3>Адвокатский статус</h3>
+              <p>Все специалисты — действующие адвокаты, состоящие в реестре и
+                связанные адвокатской тайной.</p></div>
+          </li>
+          <li>
+            <span class="num">2</span>
+            <div><h3>Прозрачная стоимость</h3>
+              <p>Фиксируем гонорар в соглашении заранее. Никаких скрытых доплат
+                в процессе ведения дела.</p></div>
+          </li>
+          <li>
+            <span class="num">3</span>
+            <div><h3>Личное ведение дела</h3>
+              <p>Ваше дело ведёт конкретный адвокат, а не «дежурный». Вы всегда на
+                связи со своим специалистом.</p></div>
+          </li>
+          <li>
+            <span class="num">4</span>
+            <div><h3>Опыт во всех инстанциях</h3>
+              <p>От районного суда до Верховного. Готовим документы, представляем
+                интересы, обжалуем.</p></div>
+          </li>
+        </ul>
+      </div>
+      <aside class="why-panel">
+        <h3>Первая консультация — бесплатно</h3>
+        <p>Расскажите о ситуации — мы оценим перспективы дела и предложим план
+          действий. Без обязательств.</p>
+        <p class="quote">«Адвокат нужен не тогда, когда уже поздно, а тогда, когда
+          ещё можно всё изменить».</p>
+        <a class="btn btn-gold" href="#zayavka" style="margin-top:26px">Получить консультацию</a>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TEAM ============ -->
+<section id="team">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Команда</span>
+      <h2>Наши адвокаты</h2>
+      <p>Каждый специалист коллегии ведёт профильные дела и имеет успешную судебную
+        практику.</p>
+    </div>
+    <div class="grid team">
+      <article class="lawyer">
+        <div class="photo">АИ</div>
+        <div class="body">
+          <h3>Александр Иванов</h3>
+          <div class="role">Управляющий партнёр</div>
+          <p>Уголовная защита, экономические преступления. Ведёт наиболее сложные
+            дела коллегии.</p>
+          <span class="exp">Стаж 22 года</span>
+        </div>
+      </article>
+      <article class="lawyer">
+        <div class="photo">ЕС</div>
+        <div class="body">
+          <h3>Елена Смирнова</h3>
+          <div class="role">Адвокат по гражданским делам</div>
+          <p>Договорные споры, взыскание ущерба, защита прав потребителей и
+            наследственные дела.</p>
+          <span class="exp">Стаж 15 лет</span>
+        </div>
+      </article>
+      <article class="lawyer">
+        <div class="photo">ДК</div>
+        <div class="body">
+          <h3>Дмитрий Ковалёв</h3>
+          <div class="role">Адвокат по арбитражу</div>
+          <p>Корпоративные и налоговые споры, сопровождение бизнеса, банкротство
+            юридических лиц.</p>
+          <span class="exp">Стаж 13 лет</span>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CTA BAND ============ -->
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="band">
+      <div>
+        <h2>Не уверены, к какому адвокату обратиться?</h2>
+        <p>Опишите ситуацию — мы сами подберём профильного специалиста и назначим
+          удобное время встречи.</p>
+      </div>
+      <a class="btn btn-gold" href="#zayavka">Оставить заявку</a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CONTACTS + FORM ============ -->
+<section id="contacts" class="soft">
+  <div class="wrap">
+    <div class="grid contact-grid">
+      <div>
+        <span class="eyebrow">Контакты</span>
+        <h2 style="font-size:clamp(27px,3.4vw,38px)">Как нас найти</h2>
+        <p style="color:var(--muted);margin-top:12px">Приходите в офис или свяжитесь
+          любым удобным способом — ответим в течение рабочего дня.</p>
+        <ul class="info-list">
+          <li>
+            <span class="ic">📍</span>
+            <div><b>Адрес офиса</b>
+              <span>г. Москва, ул. Правовая, д. 10, офис 305</span></div>
+          </li>
+          <li>
+            <span class="ic">📞</span>
+            <div><b>Телефон</b>
+              <a href="tel:+70000000000">+7 (000) 000-00-00</a></div>
+          </li>
+          <li>
+            <span class="ic">✉️</span>
+            <div><b>Электронная почта</b>
+              <a href="mailto:info@femida-kollegiya.ru">info@femida-kollegiya.ru</a></div>
+          </li>
+          <li>
+            <span class="ic">🕘</span>
+            <div><b>Режим работы</b>
+              <span>Пн–Пт 9:00–20:00, Сб 10:00–16:00</span></div>
+          </li>
+        </ul>
+      </div>
+
+      <div class="form" id="zayavka">
+        <h3>Запись на консультацию</h3>
+        <p class="sub">Заполните форму — адвокат перезвонит и согласует время встречи.</p>
+        <form id="lead-form" novalidate>
+          <div class="field" id="f-name">
+            <label for="name">Ваше имя <span class="req">*</span></label>
+            <input type="text" id="name" name="name" placeholder="Как к вам обращаться" autocomplete="name">
+            <div class="msg">Пожалуйста, укажите имя.</div>
+          </div>
+          <div class="field" id="f-phone">
+            <label for="phone">Телефон <span class="req">*</span></label>
+            <input type="tel" id="phone" name="phone" placeholder="+7 (___) ___-__-__" autocomplete="tel">
+            <div class="msg">Укажите корректный номер телефона.</div>
+          </div>
+          <div class="field">
+            <label for="topic">Направление</label>
+            <select id="topic" name="topic">
+              <option value="Уголовная защита">Уголовная защита</option>
+              <option value="Гражданские споры">Гражданские споры</option>
+              <option value="Арбитраж и бизнес">Арбитраж и бизнес</option>
+              <option value="Семейное право">Семейное право</option>
+              <option value="Недвижимость и земля">Недвижимость и земля</option>
+              <option value="Банкротство">Банкротство</option>
+              <option value="Другое / не знаю" selected>Другое / затрудняюсь выбрать</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="message">Кратко о ситуации</label>
+            <textarea id="message" name="message" placeholder="Опишите вопрос в двух-трёх предложениях"></textarea>
+          </div>
+          <button type="submit" class="btn btn-gold">Отправить заявку</button>
+          <p class="consent">Нажимая кнопку, вы соглашаетесь на обработку персональных
+            данных в соответствии с политикой конфиденциальности.</p>
+          <div class="form-note" id="form-note">
+            Спасибо! Открылось окно вашего почтового клиента с готовым письмом —
+            отправьте его, и мы свяжемся с вами. Если письмо не открылось, позвоните
+            нам по телефону <a href="tel:+70000000000">+7&nbsp;(000)&nbsp;000-00-00</a>.
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer class="site">
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-about">
+        <a href="#top" class="brand"><span class="mark">Ф</span>
+          <span style="color:#fff"><b>Фемида</b><span>Адвокатская коллегия</span></span></a>
+        <p>Некоммерческая организация, основанная на членстве адвокатов.
+          Оказываем квалифицированную юридическую помощь на территории РФ.</p>
+      </div>
+      <div>
+        <h4>Разделы</h4>
+        <ul class="foot-links">
+          <li><a href="#practices">Практики</a></li>
+          <li><a href="#why">Почему мы</a></li>
+          <li><a href="#team">Адвокаты</a></li>
+          <li><a href="#contacts">Контакты</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Контакты</h4>
+        <ul class="foot-links">
+          <li><a href="tel:+70000000000">+7 (000) 000-00-00</a></li>
+          <li><a href="mailto:info@femida-kollegiya.ru">info@femida-kollegiya.ru</a></li>
+          <li><a href="#contacts">Москва, ул. Правовая, 10</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>© <span id="year"></span> Адвокатская коллегия «Фемида». Все права защищены.</span>
+      <span>Реестровый номер · ИНН 0000000000</span>
+    </div>
+  </div>
+  <p class="disclaimer" style="color:#7c8fa0">Информация на сайте носит справочный характер
+    и не является публичной офертой. Названия, контакты и реквизиты — демонстрационные,
+    замените их на действующие данные вашей коллегии.</p>
+</footer>
+
+<script>
+  // Год в подвале
+  document.getElementById('year').textContent = new Date().getFullYear();
+
+  // Мобильное меню
+  var burger = document.getElementById('burger');
+  var menu = document.getElementById('menu');
+  burger.addEventListener('click', function(){
+    menu.classList.toggle('open');
+  });
+  menu.addEventListener('click', function(e){
+    if (e.target.tagName === 'A') menu.classList.remove('open');
+  });
+
+  // Форма заявки — валидация + отправка через mailto (без сервера)
+  var form = document.getElementById('lead-form');
+  var note = document.getElementById('form-note');
+  var RECIPIENT = 'info@femida-kollegiya.ru'; // ← заменить на почту коллегии
+
+  function setError(id, on){
+    document.getElementById(id).classList.toggle('err', on);
+  }
+
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    var name = form.name.value.trim();
+    var phone = form.phone.value.trim();
+    var topic = form.topic.value;
+    var message = form.message.value.trim();
+
+    var nameOk = name.length >= 2;
+    // Телефон: минимум 6 цифр
+    var phoneDigits = phone.replace(/\D/g, '');
+    var phoneOk = phoneDigits.length >= 6;
+
+    setError('f-name', !nameOk);
+    setError('f-phone', !phoneOk);
+
+    if (!nameOk || !phoneOk){
+      var firstErr = document.querySelector('.field.err input');
+      if (firstErr) firstErr.focus();
+      return;
+    }
+
+    var subject = 'Заявка на консультацию — ' + topic;
+    var lines = [
+      'Имя: ' + name,
+      'Телефон: ' + phone,
+      'Направление: ' + topic,
+      'Сообщение: ' + (message || '—')
+    ];
+    var body = lines.join('\r\n');
+    var mailto = 'mailto:' + RECIPIENT +
+      '?subject=' + encodeURIComponent(subject) +
+      '&body=' + encodeURIComponent(body);
+
+    window.location.href = mailto;
+    note.classList.add('show');
+    form.reset();
+  });
+
+  // Снимать подсветку ошибки при вводе
+  ['name','phone'].forEach(function(id){
+    document.getElementById(id).addEventListener('input', function(){
+      setError('f-' + id, false);
+    });
+  });
+</script>
+</body>
+</html>
