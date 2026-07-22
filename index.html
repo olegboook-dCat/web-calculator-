@@ -537,8 +537,8 @@ function openingRowInputs(o, onDel){
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td><select>
-      <option value="window"${o.type==='door'?'':' selected'}>Окно</option>
-      <option value="door"${o.type==='door'?' selected':''}>Дверь</option>
+      <option value="door"${o.type==='window'?'':' selected'}>Дверь</option>
+      <option value="window"${o.type==='window'?' selected':''}>Окно</option>
     </select></td>
     <td><input type="text" inputmode="${cfg.inputmode}" value="${formatForUnit(o.width)}"></td>
     <td><input type="text" inputmode="${cfg.inputmode}" value="${formatForUnit(o.height)}"></td>
@@ -573,7 +573,14 @@ function renderTables(){
 }
 
 function addWall(){ state.walls.push({width:10, height:3, count:1}); renderTables(); recalc(); commitHistoryImmediate(); }
-function addOpening(){ state.openings.push({type:'window', width:1.5, height:1.5, count:1}); renderTables(); recalc(); commitHistoryImmediate(); }
+function addOpening(){
+  const last = state.openings[state.openings.length - 1];
+  const next = last
+    ? { type: last.type, width: last.width, height: last.height, count: last.count }
+    : { type: 'door', width: 0.9, height: 2.0, count: 1 };
+  state.openings.push(next);
+  renderTables(); recalc(); commitHistoryImmediate();
+}
 
 function consumableRow(c, onDel){
   const tr = document.createElement('tr');
