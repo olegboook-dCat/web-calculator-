@@ -88,6 +88,7 @@
           <label>Тип фасада (пресет)</label>
           <select id="facadeType">
             <option value="ventilated">Вентилируемый фасад</option>
+            <option value="wetFacade">Мокрый фасад</option>
             <option value="composite">Композит</option>
             <option value="wood">Дерево</option>
             <option value="travertine">Травертин</option>
@@ -270,6 +271,7 @@
 <script>
 const presets = {
   ventilated:       { name:'Вентилируемый фасад',      step:0.6, fast:8,  waste:10, w:1.00, h:0.50 },
+  wetFacade:        { name:'Мокрый фасад',              step:0.6, fast:4,  waste:15, w:1.20, h:0.60 },
   composite:        { name:'Композит',                 step:0.6, fast:12, waste:10, w:1.20, h:0.6  },
   wood:             { name:'Дерево',                   step:0.6, fast:10, waste:12, w:3.00, h:0.15 },
   travertine:       { name:'Травертин',                step:0.6, fast:4,  waste:12, w:0.60, h:0.40 },
