@@ -66,6 +66,10 @@
           <label>Название проекта</label>
           <input id="projectName" placeholder="Напр. Коттедж на Набережной">
         </div>
+        <div style="flex:1;min-width:180px">
+          <label>Клиент</label>
+          <input id="clientName" placeholder="Напр. Иванов И. И.">
+        </div>
         <button class="btn ok" id="btnSave">Сохранить</button>
       </div>
 
@@ -134,7 +138,7 @@
       </div>
       <details class="hint" style="margin-top:8px">
         <summary class="muted small" style="cursor:pointer">ⓘ Подсказка</summary>
-        <div class="muted" style="margin-top:6px">Совет: можно вводить числа и с запятой, и с точкой. Обрезки (%) применяются и к панелям, и к профилю (с учётом углов дома). Процент на бой/брак применяется только к панелям. Единицу измерения можно менять в любой момент — уже введённые размеры пересчитаются автоматически. Наращиватели кронштейнов добавятся в смету сами, если толщина утеплителя больше стандартной длины кронштейна. Горизонтальная подсистема считается как суммарная длина стен × коэффициент.</div>
+        <div class="muted" style="margin-top:6px">Совет: можно вводить числа и с запятой, и с точкой. Обрезки (%) применяются и к панелям, и к профилю (с учётом углов дома). Процент на бой/брак применяется только к панелям. Единицу измерения можно менять в любой момент — уже введённые размеры пересчитаются автоматически. Наращиватели кронштейнов добавятся в смету сами, если толщина утеплителя больше стандартной длины кронштейна. Горизонтальная подсистема считается как «количество × длина» — оба значения задаёте вручную в полях выше.</div>
       </details>
       </div>
       </details>
@@ -375,6 +379,7 @@ function snapshotState(){
     facadeType: $('#facadeType').value,
     unit: $('#unit').value,
     projectName: $('#projectName').value,
+    clientName: $('#clientName').value,
     panelW: state.panelW,
     panelH: state.panelH,
     step: state.step,
@@ -403,8 +408,10 @@ function snapshotState(){
 function applySnapshot(json){
   const s = JSON.parse(json);
   $('#facadeType').value = s.facadeType;
+  state.facadeType = s.facadeType || DEFAULT_PRESET;
   $('#unit').value = s.unit || 'mm';
   $('#projectName').value = s.projectName;
+  $('#clientName').value = s.clientName || '';
   state.panelW = s.panelW;
   state.panelH = s.panelH;
   state.step = s.step;
@@ -488,6 +495,7 @@ function clearAll(){
   if(!confirm('Очистить текущую форму (стены, проёмы, цены, черновик)? Сохранённые проекты в списке ниже останутся нетронутыми.')) return;
   clearTimeout(historyTimer);
   $('#projectName').value = '';
+  $('#clientName').value = '';
   $('#unit').value = 'mm';
   $('#facadeType').value = DEFAULT_PRESET;
   applyPreset(DEFAULT_PRESET);
@@ -773,6 +781,7 @@ function recalc(){
 function projectFromUI(){
   return {
     name: $('#projectName').value.trim() || 'Без названия',
+    client: $('#clientName').value.trim(),
     facadeType: $('#facadeType').value,
     walls: state.walls,
     openings: state.openings,
@@ -842,6 +851,7 @@ function loadProjectIdx(i){
   const list = JSON.parse(localStorage.getItem('facadeProjects')||'[]');
   const p = list[i]; if(!p) return;
   $('#projectName').value = p.name || '';
+  $('#clientName').value = p.client || '';
   $('#unit').value = p.params.unit || 'mm';
   $('#facadeType').value = presets[p.facadeType] ? p.facadeType : DEFAULT_PRESET;
   applyPreset($('#facadeType').value);
@@ -884,6 +894,7 @@ function exportCSV(){
   const p = projectFromUI();
   const rows = [
     ['Объект', p.name],
+    ['Клиент', p.client || ''],
     ['Тип фасада', presets[p.facadeType] ? presets[p.facadeType].name : p.facadeType],
     ['Дата', new Date(p.date).toLocaleString()],
     [],
@@ -910,10 +921,12 @@ function exportCSV(){
 // Print / PDF
 function renderPrintReport(r){
   const name = escapeHtml($('#projectName').value.trim() || 'Без названия');
+  const client = escapeHtml($('#clientName').value.trim());
   const typeName = presets[$('#facadeType').value].name;
   const isCeiling = $('#facadeType').value === 'ceilings';
 
   let html = `<h1>Смета: ${name}</h1>
+    ${client ? `<p>Клиент: ${client}</p>` : ''}
     <p>Тип фасада: ${typeName} · Дата: ${new Date().toLocaleDateString('ru-RU')}</p>
     <h2>${isCeiling ? 'Участки потолка' : 'Стены'}</h2>
     <table><thead><tr><th>Ширина, м</th><th>Высота, м</th><th>Кол-во</th><th>Площадь, м²</th></tr></thead><tbody>`;
@@ -951,7 +964,7 @@ function printPDF(){
 }
 
 // Bind base inputs for auto-recalc
-['fasteners','waste','damagePercent','corners','bracketsPerM2','hSubsystemQty','pricePanel','priceProfile','priceFast','priceBracket','priceExtender','priceInsulation','priceHSubsystem','projectName'].forEach(id=>{
+['fasteners','waste','damagePercent','corners','bracketsPerM2','hSubsystemQty','pricePanel','priceProfile','priceFast','priceBracket','priceExtender','priceInsulation','priceHSubsystem','projectName','clientName'].forEach(id=>{
   on(document.getElementById(id),'input', e=>{ recalc(); scheduleHistoryCommit(); });
 });
 on($('#panelW'),'input', e=>{ state.panelW = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
