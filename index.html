@@ -38,6 +38,7 @@
     .knauf-only{display:none}
     body.knauf-mode .knauf-only{display:block}
     body.knauf-mode .grid-2.knauf-only,body.knauf-mode .grid-3.knauf-only{display:grid}
+    body.wet-mode .wet-hide{display:none}
     @media (max-width:800px){.row{grid-template-columns:1fr}.grid-3,.grid-2{grid-template-columns:1fr}}
     @media (max-width:480px){
       .wrap{padding:10px}
@@ -125,15 +126,15 @@
           </select>
         </div>
       </div>
-      <div class="grid-3" style="margin-top:10px">
+      <div class="grid-3 wet-hide" style="margin-top:10px">
         <div><label id="panelWLabel">Ширина панели</label><input type="text" id="panelW" inputmode="decimal"></div>
         <div><label id="panelHLabel">Высота панели</label><input type="text" id="panelH" inputmode="decimal"></div>
         <div><label id="stepLabel">Шаг профилей</label><input type="text" id="step" inputmode="decimal"></div>
       </div>
       <div class="grid-3" style="margin-top:10px">
-        <div><label>Кронштейны, шт/м²</label><input type="text" id="bracketsPerM2" inputmode="decimal" value="3"></div>
+        <div class="wet-hide"><label>Кронштейны, шт/м²</label><input type="text" id="bracketsPerM2" inputmode="decimal" value="3"></div>
         <div><label id="insulationLabel">Толщина утеплителя</label><input type="text" id="insulationThickness" inputmode="decimal"></div>
-        <div><label id="bracketLenLabel">Станд. длина кронштейна</label><input type="text" id="bracketStandardLength" inputmode="decimal"></div>
+        <div class="wet-hide"><label id="bracketLenLabel">Станд. длина кронштейна</label><input type="text" id="bracketStandardLength" inputmode="decimal"></div>
       </div>
       <div class="grid-3" style="margin-top:10px">
         <div><label>Крепёж на панель (шт)</label><input type="number" id="fasteners" step="1" min="1"></div>
@@ -206,14 +207,14 @@
       <summary style="cursor:pointer;font-size:18px;font-weight:600;color:#cbd5e1">Шаг 4. Цены</summary>
       <div style="margin-top:12px">
       <div class="grid-3">
-        <div><label>Цена за панель (₽/шт)</label><input type="text" id="pricePanel" inputmode="decimal" placeholder="₽/шт"></div>
-        <div><label>Цена профиля (₽/мп)</label><input type="text" id="priceProfile" inputmode="decimal" placeholder="₽/мп"></div>
+        <div class="wet-hide"><label>Цена за панель (₽/шт)</label><input type="text" id="pricePanel" inputmode="decimal" placeholder="₽/шт"></div>
+        <div class="wet-hide"><label>Цена профиля (₽/мп)</label><input type="text" id="priceProfile" inputmode="decimal" placeholder="₽/мп"></div>
         <div><label>Цена утеплителя (₽/м²)</label><input type="text" id="priceInsulation" inputmode="decimal" placeholder="₽/м²"></div>
       </div>
       <div class="grid-3" style="margin-top:10px">
-        <div><label>Цена наращивателя (₽/шт)</label><input type="text" id="priceExtender" inputmode="decimal" placeholder="₽/шт"></div>
-        <div><label>Цена кронштейна (₽/шт)</label><input type="text" id="priceBracket" inputmode="decimal" placeholder="₽/шт"></div>
-        <div><label>Цена крепежа (₽/шт)</label><input type="text" id="priceFast" inputmode="decimal" placeholder="₽/шт"></div>
+        <div class="wet-hide"><label>Цена наращивателя (₽/шт)</label><input type="text" id="priceExtender" inputmode="decimal" placeholder="₽/шт"></div>
+        <div class="wet-hide"><label>Цена кронштейна (₽/шт)</label><input type="text" id="priceBracket" inputmode="decimal" placeholder="₽/шт"></div>
+        <div class="wet-hide"><label>Цена крепежа (₽/шт)</label><input type="text" id="priceFast" inputmode="decimal" placeholder="₽/шт"></div>
       </div>
       <div class="grid-3" style="margin-top:10px">
         <div><label>Цена горизонтальной подсистемы (₽/мп)</label><input type="text" id="priceHSubsystem" inputmode="decimal" placeholder="₽/мп"></div>
@@ -370,6 +371,7 @@ function applyPreset(type){
 // пресеты работают как раньше и этих полей не видят.
 function updatePresetVisibility(type){
   document.body.classList.toggle('knauf-mode', type === 'knaufCeiling');
+  document.body.classList.toggle('wet-mode', type === 'wetFacade');
 }
 
 // Подставляет типовой размер листа при смене материала (Knauf-потолок).
@@ -699,6 +701,9 @@ function calculate(){
   const wasteP = Math.max(0, parseNum($('#waste').value));
   const damageP = Math.max(0, parseNum($('#damagePercent').value));
   const corners = Math.max(0, parseNum($('#corners').value));
+  // Мокрый (штукатурный) фасад: нет вентилируемой подсистемы — панели, профили,
+  // кронштейны и наращиватели не считаются, расчёт идёт по площади (утеплитель).
+  const isWet = $('#facadeType').value === 'wetFacade';
   // Поля ниже относятся только к пресету «Подвесной потолок Knauf»; для остальных
   // пресетов они скрыты, а их значения не участвуют в расчёте.
   const isKnauf = $('#facadeType').value === 'knaufCeiling';
@@ -727,7 +732,7 @@ function calculate(){
   const panelArea = Math.max(0.0001, panelW*panelH);
   const wasteCoeff = 1 + wasteP/100;
   const damageCoeff = 1 + damageP/100;
-  const panels = ceil((netArea / panelArea) * wasteCoeff * damageCoeff);
+  const panels = isWet ? 0 : ceil((netArea / panelArea) * wasteCoeff * damageCoeff);
 
   let profilesLenRaw = 0;
   let heightWeighted = 0, countTotal = 0;
@@ -741,12 +746,12 @@ function calculate(){
   });
   const avgHeight = countTotal > 0 ? heightWeighted / countTotal : 0;
   const cornerProfileLen = (corners + innerCorners) * avgHeight;
-  const profilesLen = (profilesLenRaw + cornerProfileLen) * wasteCoeff;
+  const profilesLen = isWet ? 0 : (profilesLenRaw + cornerProfileLen) * wasteCoeff;
 
-  const fasteners = ceil(panels * fast);
+  const fasteners = isWet ? 0 : ceil(panels * fast);
 
-  const brackets = ceil(netArea * bracketsPerM2);
-  const extenders = (insulationThickness > bracketStandardLength) ? brackets : 0;
+  const brackets = isWet ? 0 : ceil(netArea * bracketsPerM2);
+  const extenders = (!isWet && insulationThickness > bracketStandardLength) ? brackets : 0;
   const insulationArea = netArea * wasteCoeff;
   const hSubsystemLen = hSubsystemQty * hSubsystemLength;
 
@@ -769,30 +774,36 @@ function renderResults(r){
   const card = $('#resultsCard');
   if(!r) { card.style.display='none'; return; }
   card.style.display='block';
-  const isKnauf = $('#facadeType').value === 'knaufCeiling';
-  const sheetLabel = isKnauf ? 'Листов' : 'Панелей';
-  $('#results').innerHTML = `
-    <div class="pill">Чистая площадь: <b>${r.netArea.toFixed(2)} м²</b></div>
-    <div class="pill">${sheetLabel}: <b>${r.panels}</b></div>
+  const ft = $('#facadeType').value;
+  const isKnauf = ft === 'knaufCeiling';
+  const isWet = ft === 'wetFacade';
+  const sheetPill = isKnauf ? 'Листов' : 'Панелей';
+  const sheetRow  = isKnauf ? 'Листы'  : 'Панели';
+  // Для мокрого фасада вентилируемые позиции не показываем.
+  const ventPills = isWet ? '' : `
+    <div class="pill">${sheetPill}: <b>${r.panels}</b></div>
     <div class="pill">Профили: <b>${r.profilesLen.toFixed(2)} м</b></div>
     <div class="pill">Крепёж: <b>${r.fasteners}</b></div>
     <div class="pill">Кронштейны: <b>${r.brackets}</b></div>
-    <div class="pill">Наращиватели: <b>${r.extenders}</b></div>
+    <div class="pill">Наращиватели: <b>${r.extenders}</b></div>`;
+  $('#results').innerHTML = `
+    <div class="pill">Чистая площадь: <b>${r.netArea.toFixed(2)} м²</b></div>${ventPills}
     <div class="pill">Утеплитель: <b>${r.insulationArea.toFixed(2)} м²</b></div>
     <div class="pill">Горизонт. подсистема: <b>${r.hSubsystemLen.toFixed(2)} м</b></div>
     ${isKnauf ? `<div class="pill">Откосы: <b>${r.reveals}</b></div><div class="pill">Отливы: <b>${r.drips}</b></div>` : ''}`;
+  const ventRows = isWet ? '' : `
+      <tr><td>${sheetRow}</td><td>${r.panels}</td><td>${parseNum($('#pricePanel').value).toFixed(2)}</td><td>${r.costPanels.toFixed(2)}</td></tr>
+      <tr><td>Профили (м)</td><td>${r.profilesLen.toFixed(2)}</td><td>${parseNum($('#priceProfile').value).toFixed(2)}</td><td>${r.costProfiles.toFixed(2)}</td></tr>
+      <tr><td>Крепёж (шт)</td><td>${r.fasteners}</td><td>${parseNum($('#priceFast').value).toFixed(2)}</td><td>${r.costFasteners.toFixed(2)}</td></tr>
+      <tr><td>Кронштейны (шт)</td><td>${r.brackets}</td><td>${parseNum($('#priceBracket').value).toFixed(2)}</td><td>${r.costBrackets.toFixed(2)}</td></tr>
+      <tr><td>Наращиватели (шт)</td><td>${r.extenders}</td><td>${parseNum($('#priceExtender').value).toFixed(2)}</td><td>${r.costExtenders.toFixed(2)}</td></tr>`;
   const knaufRows = isKnauf ? `
       <tr><td>Откосы (шт)</td><td>${r.reveals}</td><td>${parseNum($('#priceReveal').value).toFixed(2)}</td><td>${r.costReveals.toFixed(2)}</td></tr>
       <tr><td>Отливы (шт)</td><td>${r.drips}</td><td>${parseNum($('#priceDrip').value).toFixed(2)}</td><td>${r.costDrips.toFixed(2)}</td></tr>` : '';
   $('#costs').innerHTML = `
     <div class="table-scroll">
     <table>
-      <tr><th>Позиция</th><th>Кол-во</th><th>Цена/ед.</th><th>Сумма</th></tr>
-      <tr><td>${sheetLabel}</td><td>${r.panels}</td><td>${parseNum($('#pricePanel').value).toFixed(2)}</td><td>${r.costPanels.toFixed(2)}</td></tr>
-      <tr><td>Профили (м)</td><td>${r.profilesLen.toFixed(2)}</td><td>${parseNum($('#priceProfile').value).toFixed(2)}</td><td>${r.costProfiles.toFixed(2)}</td></tr>
-      <tr><td>Крепёж (шт)</td><td>${r.fasteners}</td><td>${parseNum($('#priceFast').value).toFixed(2)}</td><td>${r.costFasteners.toFixed(2)}</td></tr>
-      <tr><td>Кронштейны (шт)</td><td>${r.brackets}</td><td>${parseNum($('#priceBracket').value).toFixed(2)}</td><td>${r.costBrackets.toFixed(2)}</td></tr>
-      <tr><td>Наращиватели (шт)</td><td>${r.extenders}</td><td>${parseNum($('#priceExtender').value).toFixed(2)}</td><td>${r.costExtenders.toFixed(2)}</td></tr>
+      <tr><th>Позиция</th><th>Кол-во</th><th>Цена/ед.</th><th>Сумма</th></tr>${ventRows}
       <tr><td>Утеплитель (м²)</td><td>${r.insulationArea.toFixed(2)}</td><td>${parseNum($('#priceInsulation').value).toFixed(2)}</td><td>${r.costInsulation.toFixed(2)}</td></tr>
       <tr><td>Горизонтальная подсистема (м)</td><td>${r.hSubsystemLen.toFixed(2)}</td><td>${parseNum($('#priceHSubsystem').value).toFixed(2)}</td><td>${r.costHSubsystem.toFixed(2)}</td></tr>${knaufRows}
       <tr><td>Расходные материалы</td><td>${state.consumables.length} поз.</td><td>—</td><td>${r.costConsumables.toFixed(2)}</td></tr>
@@ -801,7 +812,9 @@ function renderResults(r){
     </div>`;
   const cfg = getUnitCfg();
   const cornersNote = isKnauf ? `углов: ${r.corners} нар. + ${r.innerCorners} внутр.` : `углов: ${r.corners}`;
-  $('#note').textContent = `Тип: ${presets[$('#facadeType').value].name}. Шаг: ${formatForUnit(r.step)} ${cfg.label}, крепёж/${isKnauf ? 'лист' : 'панель'}: ${r.fast}, обрезки: ${r.wasteP}%, бой/брак: ${r.damageP}%, ${cornersNote}`;
+  $('#note').textContent = isWet
+    ? `Тип: ${presets[ft].name}. Штукатурный фасад, расчёт по площади. Обрезки: ${r.wasteP}%, толщина утеплителя учтена.`
+    : `Тип: ${presets[ft].name}. Шаг: ${formatForUnit(r.step)} ${cfg.label}, крепёж/${isKnauf ? 'лист' : 'панель'}: ${r.fast}, обрезки: ${r.wasteP}%, бой/брак: ${r.damageP}%, ${cornersNote}`;
 }
 
 function markInvalid(el, bad){
@@ -813,13 +826,17 @@ function validateInputs(){
   const panelW = state.panelW;
   const panelH = state.panelH;
   const stepV  = state.step;
+  // У мокрого фасада панелей и профилей нет — эти поля скрыты, не проверяем.
+  const isWet = $('#facadeType').value === 'wetFacade';
 
-  markInvalid($('#panelW'), panelW<=0);
-  if(panelW<=0) msgs.push('Ширина панели должна быть больше 0.');
-  markInvalid($('#panelH'), panelH<=0);
-  if(panelH<=0) msgs.push('Высота панели должна быть больше 0.');
-  markInvalid($('#step'), stepV<=0);
-  if(stepV<=0) msgs.push('Шаг профилей должен быть больше 0.');
+  if(!isWet){
+    markInvalid($('#panelW'), panelW<=0);
+    if(panelW<=0) msgs.push('Ширина панели должна быть больше 0.');
+    markInvalid($('#panelH'), panelH<=0);
+    if(panelH<=0) msgs.push('Высота панели должна быть больше 0.');
+    markInvalid($('#step'), stepV<=0);
+    if(stepV<=0) msgs.push('Шаг профилей должен быть больше 0.');
+  }
 
   const wRows = $('#wallsTbl tbody').children;
   let wallsBad = false;
@@ -993,21 +1010,24 @@ function loadProjectIdx(i){
 function exportCSV(){
   const p = projectFromUI();
   const isKnauf = p.facadeType === 'knaufCeiling';
+  const isWet = p.facadeType === 'wetFacade';
   const rows = [
     ['Объект', p.name],
     ['Клиент', p.client || ''],
     ['Тип фасада', presets[p.facadeType] ? presets[p.facadeType].name : p.facadeType],
     ['Дата', new Date(p.date).toLocaleString()],
     [],
-    ['Позиция','Кол-во','Цена/ед.','Сумма'],
-    [isKnauf ? 'Листы' : 'Панели', p.result.panels, p.params.pricePanel.toFixed(2), p.result.costPanels.toFixed(2)],
-    ['Профили (м)', p.result.profilesLen.toFixed(2), p.params.priceProfile.toFixed(2), p.result.costProfiles.toFixed(2)],
-    ['Крепёж', p.result.fasteners, p.params.priceFast.toFixed(2), p.result.costFasteners.toFixed(2)],
-    ['Кронштейны', p.result.brackets, p.params.priceBracket.toFixed(2), p.result.costBrackets.toFixed(2)],
-    ['Наращиватели', p.result.extenders, p.params.priceExtender.toFixed(2), p.result.costExtenders.toFixed(2)],
-    ['Утеплитель (м²)', p.result.insulationArea.toFixed(2), p.params.priceInsulation.toFixed(2), p.result.costInsulation.toFixed(2)],
-    ['Горизонтальная подсистема (м)', p.result.hSubsystemLen.toFixed(2), p.params.priceHSubsystem.toFixed(2), p.result.costHSubsystem.toFixed(2)]
+    ['Позиция','Кол-во','Цена/ед.','Сумма']
   ];
+  if(!isWet){
+    rows.push([isKnauf ? 'Листы' : 'Панели', p.result.panels, p.params.pricePanel.toFixed(2), p.result.costPanels.toFixed(2)]);
+    rows.push(['Профили (м)', p.result.profilesLen.toFixed(2), p.params.priceProfile.toFixed(2), p.result.costProfiles.toFixed(2)]);
+    rows.push(['Крепёж', p.result.fasteners, p.params.priceFast.toFixed(2), p.result.costFasteners.toFixed(2)]);
+    rows.push(['Кронштейны', p.result.brackets, p.params.priceBracket.toFixed(2), p.result.costBrackets.toFixed(2)]);
+    rows.push(['Наращиватели', p.result.extenders, p.params.priceExtender.toFixed(2), p.result.costExtenders.toFixed(2)]);
+  }
+  rows.push(['Утеплитель (м²)', p.result.insulationArea.toFixed(2), p.params.priceInsulation.toFixed(2), p.result.costInsulation.toFixed(2)]);
+  rows.push(['Горизонтальная подсистема (м)', p.result.hSubsystemLen.toFixed(2), p.params.priceHSubsystem.toFixed(2), p.result.costHSubsystem.toFixed(2)]);
   if(isKnauf){
     rows.push(['Откосы (шт)', p.result.reveals, p.params.priceReveal.toFixed(2), p.result.costReveals.toFixed(2)]);
     rows.push(['Отливы (шт)', p.result.drips, p.params.priceDrip.toFixed(2), p.result.costDrips.toFixed(2)]);
@@ -1029,6 +1049,7 @@ function renderPrintReport(r){
   const client = escapeHtml($('#clientName').value.trim());
   const typeName = presets[$('#facadeType').value].name;
   const isKnauf = $('#facadeType').value === 'knaufCeiling';
+  const isWet = $('#facadeType').value === 'wetFacade';
   const isCeiling = $('#facadeType').value === 'ceilings' || isKnauf;
 
   let html = `<h1>Смета: ${name}</h1>
@@ -1047,12 +1068,12 @@ function renderPrintReport(r){
   });
   html += `</tbody></table>
     <h2>Результат</h2>
-    <table><thead><tr><th>Позиция</th><th>Кол-во</th><th>Цена/ед.</th><th>Сумма</th></tr></thead><tbody>
+    <table><thead><tr><th>Позиция</th><th>Кол-во</th><th>Цена/ед.</th><th>Сумма</th></tr></thead><tbody>${isWet ? '' : `
       <tr><td>${isKnauf ? 'Листы' : 'Панели'}</td><td>${r.panels}</td><td>${parseNum($('#pricePanel').value).toFixed(2)}</td><td>${r.costPanels.toFixed(2)}</td></tr>
       <tr><td>Профили (м)</td><td>${r.profilesLen.toFixed(2)}</td><td>${parseNum($('#priceProfile').value).toFixed(2)}</td><td>${r.costProfiles.toFixed(2)}</td></tr>
       <tr><td>Крепёж (шт)</td><td>${r.fasteners}</td><td>${parseNum($('#priceFast').value).toFixed(2)}</td><td>${r.costFasteners.toFixed(2)}</td></tr>
       <tr><td>Кронштейны (шт)</td><td>${r.brackets}</td><td>${parseNum($('#priceBracket').value).toFixed(2)}</td><td>${r.costBrackets.toFixed(2)}</td></tr>
-      <tr><td>Наращиватели (шт)</td><td>${r.extenders}</td><td>${parseNum($('#priceExtender').value).toFixed(2)}</td><td>${r.costExtenders.toFixed(2)}</td></tr>
+      <tr><td>Наращиватели (шт)</td><td>${r.extenders}</td><td>${parseNum($('#priceExtender').value).toFixed(2)}</td><td>${r.costExtenders.toFixed(2)}</td></tr>`}
       <tr><td>Утеплитель (м²)</td><td>${r.insulationArea.toFixed(2)}</td><td>${parseNum($('#priceInsulation').value).toFixed(2)}</td><td>${r.costInsulation.toFixed(2)}</td></tr>
       <tr><td>Горизонтальная подсистема (м)</td><td>${r.hSubsystemLen.toFixed(2)}</td><td>${parseNum($('#priceHSubsystem').value).toFixed(2)}</td><td>${r.costHSubsystem.toFixed(2)}</td></tr>${isKnauf ? `
       <tr><td>Откосы (шт)</td><td>${r.reveals}</td><td>${parseNum($('#priceReveal').value).toFixed(2)}</td><td>${r.costReveals.toFixed(2)}</td></tr>
