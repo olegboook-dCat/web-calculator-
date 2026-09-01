@@ -37,6 +37,15 @@
     .table-scroll{width:100%;overflow-x:auto}
     .total-badge{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#062012;border:1px solid #14532d;border-radius:12px;padding:12px 16px;margin:0 0 10px;font-size:16px;color:#cbd5e1}
     .total-badge b{font-size:22px;color:#86efac;white-space:nowrap}
+    .cut-block{border:1px solid #1f2937;border-radius:10px;padding:8px 10px;margin:6px 0;background:#0b1221}
+    .cut-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .cut-no{padding:2px 8px;border-radius:999px;border:1px solid #334155;font-size:13px;white-space:nowrap}
+    .cut-head .cut-name{flex:1;min-width:120px;width:auto}
+    .cut-sum{color:#86efac;white-space:nowrap;font-size:16px}
+    .cut-items{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center}
+    .cut-items .item{display:flex;align-items:center;gap:2px}
+    .cut-items .item input{width:78px}
+    .plus-sign{color:var(--muted)}
     .knauf-only{display:none}
     body.knauf-mode .knauf-only{display:block}
     body.knauf-mode .grid-2.knauf-only,body.knauf-mode .grid-3.knauf-only{display:grid}
@@ -307,12 +316,7 @@
           </div>
           <div id="tapeCutsWrap" style="margin-top:10px;display:none">
             <div class="muted small" style="margin-bottom:2px">Отсечки</div>
-            <div class="table-scroll">
-            <table id="tapeCutsTbl">
-              <thead><tr><th>№</th><th>Сумма</th><th></th></tr></thead>
-              <tbody></tbody>
-            </table>
-            </div>
+            <div id="tapeCutsList"></div>
           </div>
           <div class="actions" style="margin-top:10px">
             <button class="btn ghost small" id="tapeClear" style="padding:4px 10px">Очистить всё</button>
@@ -1423,7 +1427,14 @@ function saveTapeCuts(){ try{ localStorage.setItem(TAPE_CUTS_KEY, JSON.stringify
 function formatTapeNumber(n){ return String(Math.round(n*1000)/1000); }
 
 function tapeGroupSum(){ return tapeEntries.reduce((s,v)=> s + parseNum(v), 0); }
-function tapeCutsSum(){ return tapeCuts.reduce((s,v)=> s + parseNum(v), 0); }
+function cutSum(cut){ return (cut && Array.isArray(cut.items) ? cut.items : []).reduce((s,v)=> s + parseNum(v), 0); }
+function tapeCutsSum(){ return tapeCuts.reduce((s,c)=> s + cutSum(c), 0); }
+// Приводим отсечку к виду {name, items:[...]}. Поддерживаем старый формат (просто число).
+function normalizeCut(el){
+  if(el && Array.isArray(el.items)) return { name: String(el.name || ''), items: el.items.map(x=>parseNum(x)) };
+  if(el && typeof el === 'object' && 'value' in el) return { name: String(el.name || ''), items: [parseNum(el.value)] };
+  return { name: '', items: [parseNum(el)] };
+}
 function updateTapeTotals(){
   const g = tapeGroupSum(), c = tapeCutsSum();
   $('#tapeGroupSum').textContent = formatTapeNumber(g);
@@ -1447,16 +1458,34 @@ function renderTape(){
 }
 function renderTapeCuts(){
   $('#tapeCutsWrap').style.display = tapeCuts.length ? 'block' : 'none';
-  const body = $('#tapeCutsTbl tbody'); body.innerHTML='';
-  tapeCuts.forEach((val,idx)=>{
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>№${idx+1}</td>
-      <td><input type="text" inputmode="decimal" value="${val}"></td>
-      <td><button class="btn ghost">✕</button></td>`;
-    on(tr.querySelector('input'),'input', e=>{ tapeCuts[idx] = parseNum(e.target.value); updateTapeTotals(); saveTapeCuts(); });
-    tr.querySelector('button').addEventListener('click', e=>{ e.preventDefault(); tapeCuts.splice(idx,1); saveTapeCuts(); renderTapeCuts(); });
-    body.appendChild(tr);
+  const list = $('#tapeCutsList'); list.innerHTML = '';
+  tapeCuts.forEach((cut, ci)=>{
+    const block = document.createElement('div'); block.className = 'cut-block';
+    const head = document.createElement('div'); head.className = 'cut-head';
+    head.innerHTML = `
+      <span class="cut-no">№${ci+1}</span>
+      <input class="cut-name" type="text" placeholder="Название (напр. Фасад по улице)" value="${escapeHtml(cut.name || '')}">
+      <b class="cut-sum">${formatTapeNumber(cutSum(cut))}</b>
+      <button class="btn ghost cut-del">✕</button>`;
+    const sumEl = head.querySelector('.cut-sum');
+    on(head.querySelector('.cut-name'),'input', e=>{ cut.name = e.target.value; saveTapeCuts(); });
+    head.querySelector('.cut-del').addEventListener('click', e=>{ e.preventDefault(); tapeCuts.splice(ci,1); saveTapeCuts(); renderTapeCuts(); });
+    block.appendChild(head);
+
+    const items = document.createElement('div'); items.className = 'cut-items';
+    cut.items.forEach((val, ii)=>{
+      if(ii > 0){ const plus = document.createElement('span'); plus.className = 'plus-sign'; plus.textContent = '+'; items.appendChild(plus); }
+      const item = document.createElement('span'); item.className = 'item';
+      item.innerHTML = `<input type="text" inputmode="decimal" value="${val}"><button class="btn ghost">✕</button>`;
+      on(item.querySelector('input'),'input', e=>{ cut.items[ii] = parseNum(e.target.value); sumEl.textContent = formatTapeNumber(cutSum(cut)); updateTapeTotals(); saveTapeCuts(); });
+      item.querySelector('button').addEventListener('click', e=>{ e.preventDefault(); cut.items.splice(ii,1); saveTapeCuts(); renderTapeCuts(); });
+      items.appendChild(item);
+    });
+    const addBtn = document.createElement('button'); addBtn.className = 'btn ghost small'; addBtn.style.padding = '2px 8px'; addBtn.textContent = '＋ число';
+    addBtn.addEventListener('click', e=>{ e.preventDefault(); cut.items.push(0); saveTapeCuts(); renderTapeCuts(); });
+    items.appendChild(addBtn);
+    block.appendChild(items);
+    list.appendChild(block);
   });
   updateTapeTotals();
 }
@@ -1472,7 +1501,8 @@ function addTapeEntry(){
 // «Отсечь»: сумма текущей группы становится новой отсечкой, группа обнуляется.
 function cutTape(){
   if(!tapeEntries.length){ $('#tapeInput').focus(); return; }
-  tapeCuts.push(Math.round(tapeGroupSum() * 1000) / 1000);
+  // Сохраняем и историю чисел, из которых сложилась отсечка.
+  tapeCuts.push({ name: '', items: tapeEntries.map(v=>parseNum(v)) });
   tapeEntries = [];
   saveTapeCuts(); saveTapeEntries();
   renderTape(); renderTapeCuts();
@@ -1492,7 +1522,7 @@ on($('#tapeClear'),'click', e=>{ e.preventDefault(); clearTape(); });
 on($('#tapeInput'),'keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addTapeEntry(); } });
 
 tapeEntries = loadTapeArray(TAPE_KEY);
-tapeCuts = loadTapeArray(TAPE_CUTS_KEY);
+tapeCuts = loadTapeArray(TAPE_CUTS_KEY).map(normalizeCut);   // поддержка старого формата
 renderTape();
 renderTapeCuts();
 </script>
