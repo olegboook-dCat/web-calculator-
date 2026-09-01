@@ -48,6 +48,9 @@
     .cut-items .item{display:flex;align-items:center;gap:3px}
     .cut-items .item input{width:78px}
     .item-no{color:var(--muted);font-size:12px}
+    .pill.near-limit{border-color:#7f1d1d;background:#2a0f14}
+    .pill.near-limit b{color:#f87171}
+    .cut-sum.near-limit{color:#f87171}
     .knauf-only{display:none}
     body.knauf-mode .knauf-only{display:block}
     body.knauf-mode .grid-2.knauf-only,body.knauf-mode .grid-3.knauf-only{display:grid}
@@ -298,15 +301,21 @@
         <div style="margin-top:12px">
           <details class="hint" style="margin-top:0">
             <summary class="muted small" style="cursor:pointer">ⓘ Подсказка</summary>
-            <div class="muted" style="margin-top:6px">Отдельный инструмент для замеров — не связан с расчётом фасада выше. Вводите число и нажимайте «+ Добавить» (или Enter) — оно попадёт в текущую группу, её сумма считается сама. Кнопка «✂ Отсечь» закрывает группу: её сумма записывается отдельной строкой с порядковым номером (Отсечка №1, №2 …), а ввод обнуляется для следующей. Все отсечки складываются в общий итог (плюс текущая группа). Числа и отсечки можно править и удалять.</div>
+            <div class="muted" style="margin-top:6px">Отдельный инструмент для замеров — не связан с расчётом фасада выше. Вводите число и нажимайте «+ Добавить» (или Enter) — оно попадёт в текущую группу, её сумма считается сама. Кнопка «✂ Отсечь» закрывает группу: её сумма записывается отдельной строкой с порядковым номером (Отсечка №1, №2 …), а ввод обнуляется для следующей. Все отсечки складываются в общий итог (плюс текущая группа). Числа и отсечки можно править и удалять. «Исходный лист» — длина заготовки; когда сумма (текущей группы или отсечки) достигает 95% длины листа, поле подсвечивается красным.</div>
           </details>
+          <div class="actions" style="margin-top:8px;align-items:center">
+            <span class="muted small">Исходный лист:</span>
+            <input type="text" id="tapeSheet" inputmode="decimal" value="1220" style="max-width:110px">
+            <button class="btn ghost small" id="tapeSheet1220" style="padding:4px 10px">1220</button>
+            <button class="btn ghost small" id="tapeSheet1500" style="padding:4px 10px">1500</button>
+          </div>
           <div class="actions" style="margin-top:8px">
             <input type="text" id="tapeInput" inputmode="decimal" placeholder="Введите число" style="max-width:200px">
             <button class="btn primary" id="tapeAdd">+ Добавить</button>
             <button class="btn" id="tapeCut">✂ Отсечь</button>
           </div>
           <div style="margin-top:10px">
-            <span class="pill">Текущая группа: <b id="tapeGroupSum">0</b></span>
+            <span class="pill" id="tapeGroupPill">Текущая группа: <b id="tapeGroupSum">0</b></span>
             <span class="pill">Сумма отсечек: <b id="tapeCutsSum">0</b></span>
             <span class="pill" style="font-size:16px">Общий итог: <b id="tapeGrand">0</b></span>
           </div>
@@ -1414,6 +1423,8 @@ updateUndoRedoButtons();
 // tapeEntries — числа текущей группы; tapeCuts — отсечённые суммы (с номерами).
 const TAPE_KEY = 'facadeTapeCalculatorEntries';
 const TAPE_CUTS_KEY = 'facadeTapeCalculatorCuts';
+const TAPE_SHEET_KEY = 'facadeTapeSheetLen';
+const TAPE_NEAR_RATIO = 0.95;   // доля длины листа, с которой поле краснеет
 let tapeEntries = [];
 let tapeCuts = [];
 
@@ -1432,6 +1443,9 @@ function formatTapeNumber(n){ return String(Math.round(n*1000)/1000); }
 
 function tapeGroupSum(){ return tapeEntries.reduce((s,v)=> s + parseNum(v), 0); }
 function cutSum(cut){ return (cut && Array.isArray(cut.items) ? cut.items : []).reduce((s,v)=> s + parseNum(v), 0); }
+// Длина исходного листа и признак «сумма приближается к пределу» (≥95% листа).
+function tapeSheetLen(){ return Math.max(0, parseNum($('#tapeSheet').value)); }
+function nearLimit(sum){ const s = tapeSheetLen(); return s > 0 && sum >= s * TAPE_NEAR_RATIO; }
 function tapeCutsSum(){ return tapeCuts.reduce((s,c)=> s + cutSum(c), 0); }
 // Приводим отсечку к виду {name, items:[...]}. Поддерживаем старый формат (просто число).
 function normalizeCut(el){
@@ -1444,6 +1458,7 @@ function updateTapeTotals(){
   $('#tapeGroupSum').textContent = formatTapeNumber(g);
   $('#tapeCutsSum').textContent = formatTapeNumber(c);
   $('#tapeGrand').textContent = formatTapeNumber(g + c);   // отсечки + текущая группа
+  $('#tapeGroupPill').classList.toggle('near-limit', nearLimit(g));
 }
 
 function renderTape(){
@@ -1473,6 +1488,7 @@ function renderTapeCuts(){
     noBtn.title = 'Нажмите, чтобы задать/изменить название';
     const nameView = document.createElement('span'); nameView.className = 'cut-name-view'; nameView.textContent = cut.name || '';
     const sumEl = document.createElement('b'); sumEl.className = 'cut-sum'; sumEl.textContent = formatTapeNumber(cutSum(cut));
+    sumEl.classList.toggle('near-limit', nearLimit(cutSum(cut)));
     const toggle = document.createElement('button');
     toggle.type = 'button'; toggle.className = 'btn ghost small'; toggle.style.padding = '2px 8px';
     const setToggle = ()=>{ toggle.textContent = (cut._open ? '▾' : '▸') + ' история (' + cut.items.length + ')'; };
@@ -1499,7 +1515,7 @@ function renderTapeCuts(){
     cut.items.forEach((val, ii)=>{
       const item = document.createElement('span'); item.className = 'item';
       item.innerHTML = `<span class="item-no">${ii + 1}.</span><input type="text" inputmode="decimal" value="${val}"><button class="btn ghost">✕</button>`;
-      on(item.querySelector('input'),'input', e=>{ cut.items[ii] = parseNum(e.target.value); sumEl.textContent = formatTapeNumber(cutSum(cut)); updateTapeTotals(); saveTapeCuts(); });
+      on(item.querySelector('input'),'input', e=>{ cut.items[ii] = parseNum(e.target.value); const cs = cutSum(cut); sumEl.textContent = formatTapeNumber(cs); sumEl.classList.toggle('near-limit', nearLimit(cs)); updateTapeTotals(); saveTapeCuts(); });
       item.querySelector('button').addEventListener('click', e=>{ e.preventDefault(); cut.items.splice(ii, 1); saveTapeCuts(); renderTapeCuts(); });
       items.appendChild(item);
     });
@@ -1541,11 +1557,18 @@ function clearTape(){
   renderTape(); renderTapeCuts();
 }
 
+function saveTapeSheet(){ try{ localStorage.setItem(TAPE_SHEET_KEY, $('#tapeSheet').value); }catch(e){} }
+function setTapeSheet(v){ $('#tapeSheet').value = v; saveTapeSheet(); updateTapeTotals(); renderTapeCuts(); }
+
 on($('#tapeAdd'),'click', e=>{ e.preventDefault(); addTapeEntry(); });
 on($('#tapeCut'),'click', e=>{ e.preventDefault(); cutTape(); });
 on($('#tapeClear'),'click', e=>{ e.preventDefault(); clearTape(); });
 on($('#tapeInput'),'keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addTapeEntry(); } });
+on($('#tapeSheet'),'input', e=>{ saveTapeSheet(); updateTapeTotals(); renderTapeCuts(); });
+on($('#tapeSheet1220'),'click', e=>{ e.preventDefault(); setTapeSheet('1220'); });
+on($('#tapeSheet1500'),'click', e=>{ e.preventDefault(); setTapeSheet('1500'); });
 
+try{ const sv = localStorage.getItem(TAPE_SHEET_KEY); if(sv != null) $('#tapeSheet').value = sv; }catch(e){}
 tapeEntries = loadTapeArray(TAPE_KEY);
 tapeCuts = loadTapeArray(TAPE_CUTS_KEY).map(normalizeCut);   // поддержка старого формата
 renderTape();
