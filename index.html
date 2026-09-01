@@ -310,6 +310,8 @@ const presets = {
   knaufCeiling:     { name:'Подвесной потолок Knauf',   step:0.6, fast:12, waste:10, w:1.20, h:2.50 }
 };
 const DEFAULT_PRESET = 'ventilated';
+// Разумный предел толщины утеплителя, чтобы случайно не ввести нереальное число.
+const MAX_INSULATION_M = 0.2; // 200 мм
 
 // Стандартные размеры листов для пресета «Подвесной потолок Knauf».
 // Выбор материала подставляет типовой размер листа (его можно поправить вручную).
@@ -401,7 +403,7 @@ function updateUnitLabels(){
   $('#panelWLabel').textContent = `Ширина ${sheetWord} (${cfg.label})`;
   $('#panelHLabel').textContent = `Высота ${sheetWord} (${cfg.label})`;
   $('#stepLabel').textContent = `Шаг профилей (${cfg.label})`;
-  $('#insulationLabel').textContent = `Толщина утеплителя (${cfg.label})`;
+  $('#insulationLabel').textContent = `Толщина утеплителя (${cfg.label}, макс 200 мм)`;
   $('#bracketLenLabel').textContent = `Станд. длина кронштейна (${cfg.label})`;
   // Для мокрого фасада — «мокрая» терминология вместо вентфасадной.
   $('#hSubsystemLengthLabel').textContent = isWet
@@ -854,6 +856,11 @@ function validateInputs(){
     if(stepV<=0) msgs.push('Шаг профилей должен быть больше 0.');
   }
 
+  const rawThick = displayToMeters($('#insulationThickness').value);
+  const thickOver = rawThick > MAX_INSULATION_M + 1e-9;
+  markInvalid($('#insulationThickness'), thickOver);
+  if(thickOver) msgs.push('Толщина утеплителя ограничена 200 мм — значение уменьшено до предела.');
+
   const wRows = $('#wallsTbl tbody').children;
   let wallsBad = false;
   state.walls.forEach((w,idx)=>{
@@ -1117,7 +1124,9 @@ on($('#sheetMaterial'),'change', e=>{ applySheetMaterial(); commitHistoryImmedia
 on($('#panelW'),'input', e=>{ state.panelW = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
 on($('#panelH'),'input', e=>{ state.panelH = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
 on($('#step'),'input', e=>{ state.step = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
-on($('#insulationThickness'),'input', e=>{ state.insulationThickness = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
+on($('#insulationThickness'),'input', e=>{ state.insulationThickness = Math.min(MAX_INSULATION_M, Math.max(0, displayToMeters(e.target.value))); recalc(); scheduleHistoryCommit(); });
+// На выходе из поля подрезаем показанное значение до допустимого предела.
+on($('#insulationThickness'),'change', e=>{ $('#insulationThickness').value = formatForUnit(state.insulationThickness); recalc(); });
 on($('#bracketStandardLength'),'input', e=>{ state.bracketStandardLength = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
 on($('#hSubsystemLength'),'input', e=>{ state.hSubsystemLength = displayToMeters(e.target.value); recalc(); scheduleHistoryCommit(); });
 on($('#unit'),'change', e=>{ renderPanelFields(); renderTables(); updateUnitLabels(); recalc(); commitHistoryImmediate(); });
