@@ -39,13 +39,15 @@
     .total-badge b{font-size:22px;color:#86efac;white-space:nowrap}
     .cut-block{border:1px solid #1f2937;border-radius:10px;padding:8px 10px;margin:6px 0;background:#0b1221}
     .cut-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-    .cut-no{padding:2px 8px;border-radius:999px;border:1px solid #334155;font-size:13px;white-space:nowrap}
-    .cut-head .cut-name{flex:1;min-width:120px;width:auto}
+    .cut-no{padding:3px 10px;border-radius:999px;border:1px solid #334155;background:#0b1221;color:#e5e7eb;font-size:13px;white-space:nowrap;cursor:pointer}
+    .cut-no:hover{border-color:var(--pri)}
+    .cut-name-view{flex:1;min-width:0;color:#cbd5e1}
+    .cut-name-edit{flex:1;min-width:120px;width:auto}
     .cut-sum{color:#86efac;white-space:nowrap;font-size:16px}
-    .cut-items{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center}
-    .cut-items .item{display:flex;align-items:center;gap:2px}
+    .cut-items{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;align-items:center}
+    .cut-items .item{display:flex;align-items:center;gap:3px}
     .cut-items .item input{width:78px}
-    .plus-sign{color:var(--muted)}
+    .item-no{color:var(--muted);font-size:12px}
     .knauf-only{display:none}
     body.knauf-mode .knauf-only{display:block}
     body.knauf-mode .grid-2.knauf-only,body.knauf-mode .grid-3.knauf-only{display:grid}
@@ -1423,7 +1425,9 @@ function loadTapeArray(key){
   }catch(e){ return []; }
 }
 function saveTapeEntries(){ try{ localStorage.setItem(TAPE_KEY, JSON.stringify(tapeEntries)); }catch(e){} }
-function saveTapeCuts(){ try{ localStorage.setItem(TAPE_CUTS_KEY, JSON.stringify(tapeCuts)); }catch(e){} }
+// Сохраняем только {name, items}; служебный флаг раскрытия (_open) не пишем,
+// чтобы после перезагрузки история была свёрнута по умолчанию.
+function saveTapeCuts(){ try{ localStorage.setItem(TAPE_CUTS_KEY, JSON.stringify(tapeCuts.map(c=>({name:c.name||'', items:c.items})))); }catch(e){} }
 function formatTapeNumber(n){ return String(Math.round(n*1000)/1000); }
 
 function tapeGroupSum(){ return tapeEntries.reduce((s,v)=> s + parseNum(v), 0); }
@@ -1461,30 +1465,51 @@ function renderTapeCuts(){
   const list = $('#tapeCutsList'); list.innerHTML = '';
   tapeCuts.forEach((cut, ci)=>{
     const block = document.createElement('div'); block.className = 'cut-block';
+
+    // --- шапка: №, название (если задано), сумма, переключатель истории, удалить ---
     const head = document.createElement('div'); head.className = 'cut-head';
-    head.innerHTML = `
-      <span class="cut-no">№${ci+1}</span>
-      <input class="cut-name" type="text" placeholder="Название (напр. Фасад по улице)" value="${escapeHtml(cut.name || '')}">
-      <b class="cut-sum">${formatTapeNumber(cutSum(cut))}</b>
-      <button class="btn ghost cut-del">✕</button>`;
-    const sumEl = head.querySelector('.cut-sum');
-    on(head.querySelector('.cut-name'),'input', e=>{ cut.name = e.target.value; saveTapeCuts(); });
-    head.querySelector('.cut-del').addEventListener('click', e=>{ e.preventDefault(); tapeCuts.splice(ci,1); saveTapeCuts(); renderTapeCuts(); });
+    const noBtn = document.createElement('button');
+    noBtn.type = 'button'; noBtn.className = 'cut-no'; noBtn.textContent = '№' + (ci + 1);
+    noBtn.title = 'Нажмите, чтобы задать/изменить название';
+    const nameView = document.createElement('span'); nameView.className = 'cut-name-view'; nameView.textContent = cut.name || '';
+    const sumEl = document.createElement('b'); sumEl.className = 'cut-sum'; sumEl.textContent = formatTapeNumber(cutSum(cut));
+    const toggle = document.createElement('button');
+    toggle.type = 'button'; toggle.className = 'btn ghost small'; toggle.style.padding = '2px 8px';
+    const setToggle = ()=>{ toggle.textContent = (cut._open ? '▾' : '▸') + ' история (' + cut.items.length + ')'; };
+    setToggle();
+    const del = document.createElement('button'); del.type = 'button'; del.className = 'btn ghost'; del.textContent = '✕';
+    del.addEventListener('click', e=>{ e.preventDefault(); tapeCuts.splice(ci, 1); saveTapeCuts(); renderTapeCuts(); });
+
+    // клик по номеру → инлайн-поле ввода названия
+    noBtn.addEventListener('click', e=>{ e.preventDefault();
+      const inp = document.createElement('input');
+      inp.type = 'text'; inp.className = 'cut-name-edit'; inp.placeholder = 'Название'; inp.value = cut.name || '';
+      nameView.replaceWith(inp); inp.focus(); inp.select();
+      let done = false;
+      const commit = ()=>{ if(done) return; done = true; cut.name = inp.value.trim(); saveTapeCuts(); renderTapeCuts(); };
+      inp.addEventListener('keydown', ev=>{ if(ev.key === 'Enter'){ ev.preventDefault(); commit(); } else if(ev.key === 'Escape'){ done = true; renderTapeCuts(); } });
+      inp.addEventListener('blur', commit);
+    });
+
+    head.appendChild(noBtn); head.appendChild(nameView); head.appendChild(sumEl); head.appendChild(toggle); head.appendChild(del);
     block.appendChild(head);
 
-    const items = document.createElement('div'); items.className = 'cut-items';
+    // --- история чисел (свёрнута по умолчанию), каждое со своим номером ---
+    const items = document.createElement('div'); items.className = 'cut-items'; items.style.display = cut._open ? 'flex' : 'none';
     cut.items.forEach((val, ii)=>{
-      if(ii > 0){ const plus = document.createElement('span'); plus.className = 'plus-sign'; plus.textContent = '+'; items.appendChild(plus); }
       const item = document.createElement('span'); item.className = 'item';
-      item.innerHTML = `<input type="text" inputmode="decimal" value="${val}"><button class="btn ghost">✕</button>`;
+      item.innerHTML = `<span class="item-no">${ii + 1}.</span><input type="text" inputmode="decimal" value="${val}"><button class="btn ghost">✕</button>`;
       on(item.querySelector('input'),'input', e=>{ cut.items[ii] = parseNum(e.target.value); sumEl.textContent = formatTapeNumber(cutSum(cut)); updateTapeTotals(); saveTapeCuts(); });
-      item.querySelector('button').addEventListener('click', e=>{ e.preventDefault(); cut.items.splice(ii,1); saveTapeCuts(); renderTapeCuts(); });
+      item.querySelector('button').addEventListener('click', e=>{ e.preventDefault(); cut.items.splice(ii, 1); saveTapeCuts(); renderTapeCuts(); });
       items.appendChild(item);
     });
-    const addBtn = document.createElement('button'); addBtn.className = 'btn ghost small'; addBtn.style.padding = '2px 8px'; addBtn.textContent = '＋ число';
-    addBtn.addEventListener('click', e=>{ e.preventDefault(); cut.items.push(0); saveTapeCuts(); renderTapeCuts(); });
+    const addBtn = document.createElement('button'); addBtn.type = 'button'; addBtn.className = 'btn ghost small'; addBtn.style.padding = '2px 8px'; addBtn.textContent = '＋ число';
+    addBtn.addEventListener('click', e=>{ e.preventDefault(); cut._open = true; cut.items.push(0); saveTapeCuts(); renderTapeCuts(); });
     items.appendChild(addBtn);
     block.appendChild(items);
+
+    toggle.addEventListener('click', e=>{ e.preventDefault(); cut._open = !cut._open; items.style.display = cut._open ? 'flex' : 'none'; setToggle(); });
+
     list.appendChild(block);
   });
   updateTapeTotals();
