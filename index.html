@@ -170,7 +170,12 @@
       <details>
       <summary id="wallsSectionTitle" style="cursor:pointer;font-size:18px;font-weight:600;color:#cbd5e1">Шаг 2. Стены</summary>
       <div style="margin-top:12px">
-      <div class="actions"><button class="btn" id="addWall">+ Добавить стену</button></div>
+      <div class="actions">
+        <button class="btn" id="addWall">+ Добавить стену</button>
+        <button class="btn" id="importWallsCSV">📥 Импорт из CSV</button>
+        <button class="btn ghost small" id="tmplWallsCSV" style="padding:4px 10px">Шаблон CSV</button>
+        <input type="file" id="wallsFile" accept=".csv,text/csv,text/plain" style="display:none">
+      </div>
       <div class="table-scroll">
       <table id="wallsTbl">
         <thead><tr><th id="wallsWidthHeader">Ширина</th><th id="wallsHeightHeader">Высота</th><th>Кол-во</th><th></th></tr></thead>
@@ -179,7 +184,7 @@
       </div>
       <details class="hint" style="margin-top:8px">
         <summary class="muted small" style="cursor:pointer">ⓘ Подсказка</summary>
-        <div class="muted" id="wallsHint" style="margin-top:6px">Для мгновенного пересчёта просто меняйте значения — результаты ниже обновляются сами.</div>
+        <div class="muted" id="wallsHint" style="margin-top:6px">Для мгновенного пересчёта просто меняйте значения — результаты ниже обновляются сами. Импорт CSV: колонки «Ширина; Высота; Количество» (разделитель «;»), числа — в текущей единице измерения. Скачайте «Шаблон CSV» как образец.</div>
       </details>
       </div>
       </details>
@@ -189,7 +194,12 @@
       <details>
       <summary id="openingsSectionTitle" style="cursor:pointer;font-size:18px;font-weight:600;color:#cbd5e1">Шаг 3. Проёмы</summary>
       <div style="margin-top:12px">
-      <div class="actions"><button class="btn" id="addOpening">+ Добавить проём</button></div>
+      <div class="actions">
+        <button class="btn" id="addOpening">+ Добавить проём</button>
+        <button class="btn" id="importOpeningsCSV">📥 Импорт из CSV</button>
+        <button class="btn ghost small" id="tmplOpeningsCSV" style="padding:4px 10px">Шаблон CSV</button>
+        <input type="file" id="openingsFile" accept=".csv,text/csv,text/plain" style="display:none">
+      </div>
       <div class="table-scroll">
       <table id="openingsTbl">
         <thead><tr><th>Тип</th><th id="openingsWidthHeader">Ширина</th><th id="openingsHeightHeader">Высота</th><th>Кол-во</th><th></th></tr></thead>
@@ -198,7 +208,7 @@
       </div>
       <details class="hint" style="margin-top:8px">
         <summary class="muted small" style="cursor:pointer">ⓘ Подсказка</summary>
-        <div class="muted" style="margin-top:6px">Окна/двери — их площадь вычитается. Мгновенный пересчёт включён.</div>
+        <div class="muted" style="margin-top:6px">Окна/двери — их площадь вычитается. Мгновенный пересчёт включён. Импорт CSV: колонки «Тип; Ширина; Высота; Количество» (тип — «дверь» или «окно»; разделитель «;»), числа — в текущей единице измерения.</div>
       </details>
       </div>
       </details>
@@ -1094,6 +1104,76 @@ function exportCSV(){
   URL.revokeObjectURL(url);
 }
 
+// --- Импорт стен/проёмов из CSV -------------------------------------------
+function parseCSV(text){
+  const clean = String(text).replace(/^﻿/, '');                 // убрать BOM
+  const lines = clean.split(/\r\n|\r|\n/).filter(l => l.trim() !== '');
+  return lines.map(line => {
+    const sep = line.includes(';') ? ';' : (line.includes('\t') ? '\t' : ',');
+    return line.split(sep).map(c => c.trim());
+  });
+}
+// Строка-заголовок, если ни в одной ячейке нет числа.
+function isHeaderRow(cells){ return !cells.some(c => /\d/.test(c)); }
+
+function importWallsFromCSV(text){
+  const rows = parseCSV(text);
+  const items = [];
+  rows.forEach((cells, i) => {
+    if(i === 0 && isHeaderRow(cells)) return;
+    if(cells.length < 2) return;
+    const width = displayToMeters(cells[0]);
+    const height = displayToMeters(cells[1]);
+    const count = Math.max(1, Math.floor(parseNum(cells[2]) || 1));
+    if(width > 0 && height > 0) items.push({width, height, count});
+  });
+  if(!items.length){ alert('В файле не найдено ни одной корректной строки стен. Ожидаются колонки «Ширина; Высота; Количество».'); return; }
+  applyImported('walls', items);
+}
+function importOpeningsFromCSV(text){
+  const rows = parseCSV(text);
+  const items = [];
+  rows.forEach((cells, i) => {
+    if(i === 0 && isHeaderRow(cells)) return;
+    if(cells.length < 3) return;
+    const t = cells[0].toLowerCase();
+    const type = (t.includes('окн') || t.includes('window')) ? 'window' : 'door';
+    const width = displayToMeters(cells[1]);
+    const height = displayToMeters(cells[2]);
+    const count = Math.max(1, Math.floor(parseNum(cells[3]) || 1));
+    if(width > 0 && height > 0) items.push({type, width, height, count});
+  });
+  if(!items.length){ alert('В файле не найдено ни одной корректной строки проёмов. Ожидаются колонки «Тип; Ширина; Высота; Количество».'); return; }
+  applyImported('openings', items);
+}
+function applyImported(kind, items){
+  const arr = kind === 'walls' ? state.walls : state.openings;
+  const label = kind === 'walls' ? 'стен' : 'проёмов';
+  let mode = 'replace';
+  if(arr.length){
+    mode = confirm(`Заменить текущие строки ${label} импортированными?\nОК — заменить, Отмена — добавить к существующим.`) ? 'replace' : 'append';
+  }
+  const next = mode === 'replace' ? items : arr.concat(items);
+  if(kind === 'walls') state.walls = next; else state.openings = next;
+  renderTables(); recalc(); commitHistoryImmediate();
+  alert(`Импортировано строк: ${items.length}. Размеры прочитаны в текущей единице (${getUnitCfg().label}).`);
+}
+function readFileInto(inputEl, handler){
+  const f = inputEl.files && inputEl.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = e => { try{ handler(String(e.target.result)); }catch(err){ alert('Не удалось прочитать файл.'); } };
+  reader.onerror = () => alert('Не удалось прочитать файл.');
+  reader.readAsText(f, 'utf-8');
+  inputEl.value = '';   // сбросить, чтобы повторный выбор того же файла сработал
+}
+function downloadTextFile(filename, text){
+  const blob = new Blob(['﻿' + text], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
 // Print / PDF
 function renderPrintReport(r){
   const name = escapeHtml($('#projectName').value.trim() || 'Без названия');
@@ -1163,6 +1243,13 @@ on($('#facadeType'),'change', e=>{ state.facadeType = e.target.value; applyPrese
 on($('#addWall'),'click', addWall);
 on($('#addOpening'),'click', addOpening);
 on($('#addConsumable'),'click', addConsumable);
+// Импорт из CSV
+on($('#importWallsCSV'),'click', ()=> $('#wallsFile').click());
+on($('#wallsFile'),'change', e=> readFileInto(e.target, importWallsFromCSV));
+on($('#importOpeningsCSV'),'click', ()=> $('#openingsFile').click());
+on($('#openingsFile'),'change', e=> readFileInto(e.target, importOpeningsFromCSV));
+on($('#tmplWallsCSV'),'click', ()=> downloadTextFile('walls-template.csv', `Ширина;Высота;Количество\n${formatForUnit(10)};${formatForUnit(3)};2\n${formatForUnit(6)};${formatForUnit(3)};1`));
+on($('#tmplOpeningsCSV'),'click', ()=> downloadTextFile('openings-template.csv', `Тип;Ширина;Высота;Количество\nдверь;${formatForUnit(0.9)};${formatForUnit(2)};1\nокно;${formatForUnit(1.2)};${formatForUnit(1.4)};3`));
 on($('#btnSave'),'click', saveProject);
 on($('#btnCSV'),'click', exportCSV);
 on($('#btnPDF'),'click', printPDF);
