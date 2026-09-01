@@ -287,18 +287,35 @@
         <div style="margin-top:12px">
           <details class="hint" style="margin-top:0">
             <summary class="muted small" style="cursor:pointer">ⓘ Подсказка</summary>
-            <div class="muted" style="margin-top:6px">Отдельный инструмент для замеров — не связан с расчётом фасада выше. Вводите число и нажимайте «+ Добавить» (или Enter) — оно попадёт в пронумерованный список, а сумма обновится сама. Любое значение в списке можно поправить или удалить.</div>
+            <div class="muted" style="margin-top:6px">Отдельный инструмент для замеров — не связан с расчётом фасада выше. Вводите число и нажимайте «+ Добавить» (или Enter) — оно попадёт в текущую группу, её сумма считается сама. Кнопка «✂ Отсечь» закрывает группу: её сумма записывается отдельной строкой с порядковым номером (Отсечка №1, №2 …), а ввод обнуляется для следующей. Все отсечки складываются в общий итог (плюс текущая группа). Числа и отсечки можно править и удалять.</div>
           </details>
           <div class="actions" style="margin-top:8px">
             <input type="text" id="tapeInput" inputmode="decimal" placeholder="Введите число" style="max-width:200px">
             <button class="btn primary" id="tapeAdd">+ Добавить</button>
+            <button class="btn" id="tapeCut">✂ Отсечь</button>
           </div>
-          <div class="pill" style="margin-top:10px;font-size:16px">Сумма: <b id="tapeTotal">0</b></div>
+          <div style="margin-top:10px">
+            <span class="pill">Текущая группа: <b id="tapeGroupSum">0</b></span>
+            <span class="pill">Сумма отсечек: <b id="tapeCutsSum">0</b></span>
+            <span class="pill" style="font-size:16px">Общий итог: <b id="tapeGrand">0</b></span>
+          </div>
           <div class="table-scroll">
           <table id="tapeTbl">
-            <thead><tr><th>#</th><th>Значение</th><th></th></tr></thead>
+            <thead><tr><th>#</th><th>Значение (текущая группа)</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
+          </div>
+          <div id="tapeCutsWrap" style="margin-top:10px;display:none">
+            <div class="muted small" style="margin-bottom:2px">Отсечки</div>
+            <div class="table-scroll">
+            <table id="tapeCutsTbl">
+              <thead><tr><th>№</th><th>Сумма</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+            </div>
+          </div>
+          <div class="actions" style="margin-top:10px">
+            <button class="btn ghost small" id="tapeClear" style="padding:4px 10px">Очистить всё</button>
           </div>
         </div>
       </details>
@@ -1388,26 +1405,32 @@ updateUndoRedoButtons();
 
 // --- Калькулятор-линейка: полностью отдельный инструмент (своё хранилище,
 // не связан с состоянием/историей фасадного калькулятора выше).
+// tapeEntries — числа текущей группы; tapeCuts — отсечённые суммы (с номерами).
 const TAPE_KEY = 'facadeTapeCalculatorEntries';
+const TAPE_CUTS_KEY = 'facadeTapeCalculatorCuts';
 let tapeEntries = [];
+let tapeCuts = [];
 
-function loadTapeEntries(){
+function loadTapeArray(key){
   try{
-    const raw = localStorage.getItem(TAPE_KEY);
+    const raw = localStorage.getItem(key);
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
   }catch(e){ return []; }
 }
-function saveTapeEntries(){
-  try{ localStorage.setItem(TAPE_KEY, JSON.stringify(tapeEntries)); }catch(e){}
+function saveTapeEntries(){ try{ localStorage.setItem(TAPE_KEY, JSON.stringify(tapeEntries)); }catch(e){} }
+function saveTapeCuts(){ try{ localStorage.setItem(TAPE_CUTS_KEY, JSON.stringify(tapeCuts)); }catch(e){} }
+function formatTapeNumber(n){ return String(Math.round(n*1000)/1000); }
+
+function tapeGroupSum(){ return tapeEntries.reduce((s,v)=> s + parseNum(v), 0); }
+function tapeCutsSum(){ return tapeCuts.reduce((s,v)=> s + parseNum(v), 0); }
+function updateTapeTotals(){
+  const g = tapeGroupSum(), c = tapeCutsSum();
+  $('#tapeGroupSum').textContent = formatTapeNumber(g);
+  $('#tapeCutsSum').textContent = formatTapeNumber(c);
+  $('#tapeGrand').textContent = formatTapeNumber(g + c);   // отсечки + текущая группа
 }
-function formatTapeNumber(n){
-  return String(Math.round(n*1000)/1000);
-}
-function updateTapeTotal(){
-  const total = tapeEntries.reduce((s,v)=> s + parseNum(v), 0);
-  $('#tapeTotal').textContent = formatTapeNumber(total);
-}
+
 function renderTape(){
   const body = $('#tapeTbl tbody'); body.innerHTML='';
   tapeEntries.forEach((val,idx)=>{
@@ -1416,11 +1439,26 @@ function renderTape(){
       <td>${idx+1}</td>
       <td><input type="text" inputmode="decimal" value="${val}"></td>
       <td><button class="btn ghost">✕</button></td>`;
-    on(tr.querySelector('input'),'input', e=>{ tapeEntries[idx] = parseNum(e.target.value); updateTapeTotal(); saveTapeEntries(); });
+    on(tr.querySelector('input'),'input', e=>{ tapeEntries[idx] = parseNum(e.target.value); updateTapeTotals(); saveTapeEntries(); });
     tr.querySelector('button').addEventListener('click', e=>{ e.preventDefault(); tapeEntries.splice(idx,1); saveTapeEntries(); renderTape(); });
     body.appendChild(tr);
   });
-  updateTapeTotal();
+  updateTapeTotals();
+}
+function renderTapeCuts(){
+  $('#tapeCutsWrap').style.display = tapeCuts.length ? 'block' : 'none';
+  const body = $('#tapeCutsTbl tbody'); body.innerHTML='';
+  tapeCuts.forEach((val,idx)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>№${idx+1}</td>
+      <td><input type="text" inputmode="decimal" value="${val}"></td>
+      <td><button class="btn ghost">✕</button></td>`;
+    on(tr.querySelector('input'),'input', e=>{ tapeCuts[idx] = parseNum(e.target.value); updateTapeTotals(); saveTapeCuts(); });
+    tr.querySelector('button').addEventListener('click', e=>{ e.preventDefault(); tapeCuts.splice(idx,1); saveTapeCuts(); renderTapeCuts(); });
+    body.appendChild(tr);
+  });
+  updateTapeTotals();
 }
 function addTapeEntry(){
   const raw = $('#tapeInput').value;
@@ -1431,12 +1469,32 @@ function addTapeEntry(){
   $('#tapeInput').value = '';
   $('#tapeInput').focus();
 }
+// «Отсечь»: сумма текущей группы становится новой отсечкой, группа обнуляется.
+function cutTape(){
+  if(!tapeEntries.length){ $('#tapeInput').focus(); return; }
+  tapeCuts.push(Math.round(tapeGroupSum() * 1000) / 1000);
+  tapeEntries = [];
+  saveTapeCuts(); saveTapeEntries();
+  renderTape(); renderTapeCuts();
+  $('#tapeInput').focus();
+}
+function clearTape(){
+  if(!tapeEntries.length && !tapeCuts.length) return;
+  if(!confirm('Очистить калькулятор-линейку (числа и отсечки)?')) return;
+  tapeEntries = []; tapeCuts = [];
+  saveTapeEntries(); saveTapeCuts();
+  renderTape(); renderTapeCuts();
+}
 
 on($('#tapeAdd'),'click', e=>{ e.preventDefault(); addTapeEntry(); });
+on($('#tapeCut'),'click', e=>{ e.preventDefault(); cutTape(); });
+on($('#tapeClear'),'click', e=>{ e.preventDefault(); clearTape(); });
 on($('#tapeInput'),'keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addTapeEntry(); } });
 
-tapeEntries = loadTapeEntries();
+tapeEntries = loadTapeArray(TAPE_KEY);
+tapeCuts = loadTapeArray(TAPE_CUTS_KEY);
 renderTape();
+renderTapeCuts();
 </script>
 </body>
 </html>
