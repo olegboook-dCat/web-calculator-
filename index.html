@@ -87,6 +87,15 @@
         <button class="btn" id="btnCSV">Экспорт CSV</button>
         <button class="btn" id="btnPDF">Печать / PDF</button>
       </div>
+      <div class="actions" style="margin-top:6px">
+        <button class="btn" id="importProjectCSV">📥 Импорт проекта из CSV</button>
+        <button class="btn ghost small" id="tmplProjectCSV" style="padding:4px 10px">Шаблон CSV</button>
+        <input type="file" id="projectFile" accept=".csv,text/csv,text/plain" style="display:none">
+      </div>
+      <details class="hint" style="margin-top:6px">
+        <summary class="muted small" style="cursor:pointer">ⓘ Про импорт CSV</summary>
+        <div class="muted" style="margin-top:6px">Один файл на весь проект. Колонки: «Раздел; Тип; Ширина; Высота; Количество». Раздел — «Стена» или «Проём»; для проёма Тип — «дверь» или «окно» (у стены пусто). Разделитель «;», числа — в текущей единице измерения. Нажмите «Шаблон CSV», чтобы скачать образец.</div>
+      </details>
     </div>
 
     <div class="card">
@@ -170,12 +179,7 @@
       <details>
       <summary id="wallsSectionTitle" style="cursor:pointer;font-size:18px;font-weight:600;color:#cbd5e1">Шаг 2. Стены</summary>
       <div style="margin-top:12px">
-      <div class="actions">
-        <button class="btn" id="addWall">+ Добавить стену</button>
-        <button class="btn" id="importWallsCSV">📥 Импорт из CSV</button>
-        <button class="btn ghost small" id="tmplWallsCSV" style="padding:4px 10px">Шаблон CSV</button>
-        <input type="file" id="wallsFile" accept=".csv,text/csv,text/plain" style="display:none">
-      </div>
+      <div class="actions"><button class="btn" id="addWall">+ Добавить стену</button></div>
       <div class="table-scroll">
       <table id="wallsTbl">
         <thead><tr><th id="wallsWidthHeader">Ширина</th><th id="wallsHeightHeader">Высота</th><th>Кол-во</th><th></th></tr></thead>
@@ -184,7 +188,7 @@
       </div>
       <details class="hint" style="margin-top:8px">
         <summary class="muted small" style="cursor:pointer">ⓘ Подсказка</summary>
-        <div class="muted" id="wallsHint" style="margin-top:6px">Для мгновенного пересчёта просто меняйте значения — результаты ниже обновляются сами. Импорт CSV: колонки «Ширина; Высота; Количество» (разделитель «;»), числа — в текущей единице измерения. Скачайте «Шаблон CSV» как образец.</div>
+        <div class="muted" id="wallsHint" style="margin-top:6px">Для мгновенного пересчёта просто меняйте значения — результаты ниже обновляются сами. Можно загрузить сразу весь проект: кнопка «Импорт проекта из CSV» вверху страницы.</div>
       </details>
       </div>
       </details>
@@ -194,12 +198,7 @@
       <details>
       <summary id="openingsSectionTitle" style="cursor:pointer;font-size:18px;font-weight:600;color:#cbd5e1">Шаг 3. Проёмы</summary>
       <div style="margin-top:12px">
-      <div class="actions">
-        <button class="btn" id="addOpening">+ Добавить проём</button>
-        <button class="btn" id="importOpeningsCSV">📥 Импорт из CSV</button>
-        <button class="btn ghost small" id="tmplOpeningsCSV" style="padding:4px 10px">Шаблон CSV</button>
-        <input type="file" id="openingsFile" accept=".csv,text/csv,text/plain" style="display:none">
-      </div>
+      <div class="actions"><button class="btn" id="addOpening">+ Добавить проём</button></div>
       <div class="table-scroll">
       <table id="openingsTbl">
         <thead><tr><th>Тип</th><th id="openingsWidthHeader">Ширина</th><th id="openingsHeightHeader">Высота</th><th>Кол-во</th><th></th></tr></thead>
@@ -208,7 +207,7 @@
       </div>
       <details class="hint" style="margin-top:8px">
         <summary class="muted small" style="cursor:pointer">ⓘ Подсказка</summary>
-        <div class="muted" style="margin-top:6px">Окна/двери — их площадь вычитается. Мгновенный пересчёт включён. Импорт CSV: колонки «Тип; Ширина; Высота; Количество» (тип — «дверь» или «окно»; разделитель «;»), числа — в текущей единице измерения.</div>
+        <div class="muted" style="margin-top:6px">Окна/двери — их площадь вычитается. Мгновенный пересчёт включён. Стены и проёмы можно загрузить одним файлом — кнопка «Импорт проекта из CSV» вверху страницы.</div>
       </details>
       </div>
       </details>
@@ -1116,47 +1115,45 @@ function parseCSV(text){
 // Строка-заголовок, если ни в одной ячейке нет числа.
 function isHeaderRow(cells){ return !cells.some(c => /\d/.test(c)); }
 
-function importWallsFromCSV(text){
+// Один файл на весь проект: строки со «Стена» идут в стены, со «Проём» — в проёмы.
+// Колонки: Раздел; Тип; Ширина; Высота; Количество (у стены Тип пустой).
+function importProjectFromCSV(text){
   const rows = parseCSV(text);
-  const items = [];
+  const walls = [], openings = [];
   rows.forEach((cells, i) => {
     if(i === 0 && isHeaderRow(cells)) return;
-    if(cells.length < 2) return;
-    const width = displayToMeters(cells[0]);
-    const height = displayToMeters(cells[1]);
-    const count = Math.max(1, Math.floor(parseNum(cells[2]) || 1));
-    if(width > 0 && height > 0) items.push({width, height, count});
+    if(!cells.length) return;
+    const section = (cells[0] || '').toLowerCase();
+    const isWall = section.includes('стен');
+    const isOpening = section.includes('про') || section.includes('окн') || section.includes('двер') || section.includes('open');
+    if(isWall){
+      // допускаем как «Стена;;Ш;В;Кол», так и «Стена;Ш;В;Кол» (без пустого «Тип»)
+      const off = cells.length >= 5 ? 2 : 1;
+      const w = displayToMeters(cells[off]);
+      const h = displayToMeters(cells[off + 1]);
+      const c = Math.max(1, Math.floor(parseNum(cells[off + 2]) || 1));
+      if(w > 0 && h > 0) walls.push({width:w, height:h, count:c});
+    } else if(isOpening){
+      const t = (cells[1] || '').toLowerCase();
+      const type = (t.includes('окн') || t.includes('window')) ? 'window' : 'door';
+      const w = displayToMeters(cells[2]);
+      const h = displayToMeters(cells[3]);
+      const c = Math.max(1, Math.floor(parseNum(cells[4]) || 1));
+      if(w > 0 && h > 0) openings.push({type, width:w, height:h, count:c});
+    }
   });
-  if(!items.length){ alert('В файле не найдено ни одной корректной строки стен. Ожидаются колонки «Ширина; Высота; Количество».'); return; }
-  applyImported('walls', items);
-}
-function importOpeningsFromCSV(text){
-  const rows = parseCSV(text);
-  const items = [];
-  rows.forEach((cells, i) => {
-    if(i === 0 && isHeaderRow(cells)) return;
-    if(cells.length < 3) return;
-    const t = cells[0].toLowerCase();
-    const type = (t.includes('окн') || t.includes('window')) ? 'window' : 'door';
-    const width = displayToMeters(cells[1]);
-    const height = displayToMeters(cells[2]);
-    const count = Math.max(1, Math.floor(parseNum(cells[3]) || 1));
-    if(width > 0 && height > 0) items.push({type, width, height, count});
-  });
-  if(!items.length){ alert('В файле не найдено ни одной корректной строки проёмов. Ожидаются колонки «Тип; Ширина; Высота; Количество».'); return; }
-  applyImported('openings', items);
-}
-function applyImported(kind, items){
-  const arr = kind === 'walls' ? state.walls : state.openings;
-  const label = kind === 'walls' ? 'стен' : 'проёмов';
-  let mode = 'replace';
-  if(arr.length){
-    mode = confirm(`Заменить текущие строки ${label} импортированными?\nОК — заменить, Отмена — добавить к существующим.`) ? 'replace' : 'append';
+  if(!walls.length && !openings.length){
+    alert('В файле не найдено ни стен, ни проёмов. Формат: «Раздел; Тип; Ширина; Высота; Количество», где Раздел — «Стена» или «Проём».');
+    return;
   }
-  const next = mode === 'replace' ? items : arr.concat(items);
-  if(kind === 'walls') state.walls = next; else state.openings = next;
+  let replace = true;
+  if(state.walls.length || state.openings.length){
+    replace = confirm('Заменить текущие стены и проёмы импортированными?\nОК — заменить, Отмена — добавить к существующим.');
+  }
+  state.walls = replace ? walls : state.walls.concat(walls);
+  state.openings = replace ? openings : state.openings.concat(openings);
   renderTables(); recalc(); commitHistoryImmediate();
-  alert(`Импортировано строк: ${items.length}. Размеры прочитаны в текущей единице (${getUnitCfg().label}).`);
+  alert(`Импортировано: стен — ${walls.length}, проёмов — ${openings.length}. Размеры прочитаны в текущей единице (${getUnitCfg().label}).`);
 }
 function readFileInto(inputEl, handler){
   const f = inputEl.files && inputEl.files[0];
@@ -1243,13 +1240,19 @@ on($('#facadeType'),'change', e=>{ state.facadeType = e.target.value; applyPrese
 on($('#addWall'),'click', addWall);
 on($('#addOpening'),'click', addOpening);
 on($('#addConsumable'),'click', addConsumable);
-// Импорт из CSV
-on($('#importWallsCSV'),'click', ()=> $('#wallsFile').click());
-on($('#wallsFile'),'change', e=> readFileInto(e.target, importWallsFromCSV));
-on($('#importOpeningsCSV'),'click', ()=> $('#openingsFile').click());
-on($('#openingsFile'),'change', e=> readFileInto(e.target, importOpeningsFromCSV));
-on($('#tmplWallsCSV'),'click', ()=> downloadTextFile('walls-template.csv', `Ширина;Высота;Количество\n${formatForUnit(10)};${formatForUnit(3)};2\n${formatForUnit(6)};${formatForUnit(3)};1`));
-on($('#tmplOpeningsCSV'),'click', ()=> downloadTextFile('openings-template.csv', `Тип;Ширина;Высота;Количество\nдверь;${formatForUnit(0.9)};${formatForUnit(2)};1\nокно;${formatForUnit(1.2)};${formatForUnit(1.4)};3`));
+// Импорт проекта из CSV (один файл на стены + проёмы)
+on($('#importProjectCSV'),'click', ()=> $('#projectFile').click());
+on($('#projectFile'),'change', e=> readFileInto(e.target, importProjectFromCSV));
+on($('#tmplProjectCSV'),'click', ()=> { const f = formatForUnit;
+  downloadTextFile('project-template.csv',
+    `Раздел;Тип;Ширина;Высота;Количество\n`+
+    `Стена;;${f(12)};${f(3)};2\n`+
+    `Стена;;${f(9)};${f(3)};2\n`+
+    `Стена;;${f(9)};${f(1.5)};2\n`+
+    `Проём;дверь;${f(1.0)};${f(2.1)};1\n`+
+    `Проём;окно;${f(1.5)};${f(1.4)};4\n`+
+    `Проём;окно;${f(0.9)};${f(1.2)};3`);
+});
 on($('#btnSave'),'click', saveProject);
 on($('#btnCSV'),'click', exportCSV);
 on($('#btnPDF'),'click', printPDF);
