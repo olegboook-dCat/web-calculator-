@@ -209,7 +209,7 @@
       <div class="grid-3">
         <div class="wet-hide"><label>Цена за панель (₽/шт)</label><input type="text" id="pricePanel" inputmode="decimal" placeholder="₽/шт"></div>
         <div class="wet-hide"><label>Цена профиля (₽/мп)</label><input type="text" id="priceProfile" inputmode="decimal" placeholder="₽/мп"></div>
-        <div><label>Цена утеплителя (₽/м²)</label><input type="text" id="priceInsulation" inputmode="decimal" placeholder="₽/м²"></div>
+        <div><label id="priceInsulationLabel">Цена утеплителя (₽/м²)</label><input type="text" id="priceInsulation" inputmode="decimal" placeholder="₽/м²"></div>
       </div>
       <div class="grid-3" style="margin-top:10px">
         <div class="wet-hide"><label>Цена наращивателя (₽/шт)</label><input type="text" id="priceExtender" inputmode="decimal" placeholder="₽/шт"></div>
@@ -217,7 +217,7 @@
         <div class="wet-hide"><label>Цена крепежа (₽/шт)</label><input type="text" id="priceFast" inputmode="decimal" placeholder="₽/шт"></div>
       </div>
       <div class="grid-3" style="margin-top:10px">
-        <div><label>Цена горизонтальной подсистемы (₽/мп)</label><input type="text" id="priceHSubsystem" inputmode="decimal" placeholder="₽/мп"></div>
+        <div><label id="priceHSubsystemLabel">Цена горизонтальной подсистемы (₽/мп)</label><input type="text" id="priceHSubsystem" inputmode="decimal" placeholder="₽/мп"></div>
       </div>
       <div class="grid-2 knauf-only" id="priceRevealsDripsGroup" style="margin-top:10px">
         <div><label>Цена откоса (₽/шт)</label><input type="text" id="priceReveal" inputmode="decimal" placeholder="₽/шт"></div>
@@ -396,13 +396,19 @@ function renderPanelFields(){
 
 function updateUnitLabels(){
   const cfg = getUnitCfg();
+  const isWet = $('#facadeType').value === 'wetFacade';
   const sheetWord = $('#facadeType').value === 'knaufCeiling' ? 'листа' : 'панели';
   $('#panelWLabel').textContent = `Ширина ${sheetWord} (${cfg.label})`;
   $('#panelHLabel').textContent = `Высота ${sheetWord} (${cfg.label})`;
   $('#stepLabel').textContent = `Шаг профилей (${cfg.label})`;
   $('#insulationLabel').textContent = `Толщина утеплителя (${cfg.label})`;
   $('#bracketLenLabel').textContent = `Станд. длина кронштейна (${cfg.label})`;
-  $('#hSubsystemLengthLabel').textContent = `Горизонтальная подсистема: количество × длина (${cfg.label})`;
+  // Для мокрого фасада — «мокрая» терминология вместо вентфасадной.
+  $('#hSubsystemLengthLabel').textContent = isWet
+    ? `Фасад (мп): количество × длина`
+    : `Горизонтальная подсистема: количество × длина (${cfg.label})`;
+  $('#priceInsulationLabel').textContent = isWet ? 'Цена мокрого фасада (₽/м²)' : 'Цена утеплителя (₽/м²)';
+  $('#priceHSubsystemLabel').textContent = isWet ? 'Цена фасада (₽/мп)' : 'Цена горизонтальной подсистемы (₽/мп)';
   $('#wallsWidthHeader').textContent = `Ширина, ${cfg.label}`;
   $('#wallsHeightHeader').textContent = `Высота, ${cfg.label}`;
   $('#openingsWidthHeader').textContent = `Ширина, ${cfg.label}`;
@@ -786,10 +792,14 @@ function renderResults(r){
     <div class="pill">Крепёж: <b>${r.fasteners}</b></div>
     <div class="pill">Кронштейны: <b>${r.brackets}</b></div>
     <div class="pill">Наращиватели: <b>${r.extenders}</b></div>`;
+  const insLabel = isWet ? 'Мокрый фасад' : 'Утеплитель';
+  const hsubLabel = isWet ? 'Фасад (мп)' : 'Горизонтальная подсистема (м)';
+  const hsubPill = isWet ? 'Фасад' : 'Горизонт. подсистема';
+  const hsubUnit = isWet ? 'мп' : 'м';
   $('#results').innerHTML = `
     <div class="pill">Чистая площадь: <b>${r.netArea.toFixed(2)} м²</b></div>${ventPills}
-    <div class="pill">Утеплитель: <b>${r.insulationArea.toFixed(2)} м²</b></div>
-    <div class="pill">Горизонт. подсистема: <b>${r.hSubsystemLen.toFixed(2)} м</b></div>
+    <div class="pill">${insLabel}: <b>${r.insulationArea.toFixed(2)} м²</b></div>
+    <div class="pill">${hsubPill}: <b>${r.hSubsystemLen.toFixed(2)} ${hsubUnit}</b></div>
     ${isKnauf ? `<div class="pill">Откосы: <b>${r.reveals}</b></div><div class="pill">Отливы: <b>${r.drips}</b></div>` : ''}`;
   const ventRows = isWet ? '' : `
       <tr><td>${sheetRow}</td><td>${r.panels}</td><td>${parseNum($('#pricePanel').value).toFixed(2)}</td><td>${r.costPanels.toFixed(2)}</td></tr>
@@ -804,8 +814,8 @@ function renderResults(r){
     <div class="table-scroll">
     <table>
       <tr><th>Позиция</th><th>Кол-во</th><th>Цена/ед.</th><th>Сумма</th></tr>${ventRows}
-      <tr><td>Утеплитель (м²)</td><td>${r.insulationArea.toFixed(2)}</td><td>${parseNum($('#priceInsulation').value).toFixed(2)}</td><td>${r.costInsulation.toFixed(2)}</td></tr>
-      <tr><td>Горизонтальная подсистема (м)</td><td>${r.hSubsystemLen.toFixed(2)}</td><td>${parseNum($('#priceHSubsystem').value).toFixed(2)}</td><td>${r.costHSubsystem.toFixed(2)}</td></tr>${knaufRows}
+      <tr><td>${insLabel} (м²)</td><td>${r.insulationArea.toFixed(2)}</td><td>${parseNum($('#priceInsulation').value).toFixed(2)}</td><td>${r.costInsulation.toFixed(2)}</td></tr>
+      <tr><td>${hsubLabel}</td><td>${r.hSubsystemLen.toFixed(2)}</td><td>${parseNum($('#priceHSubsystem').value).toFixed(2)}</td><td>${r.costHSubsystem.toFixed(2)}</td></tr>${knaufRows}
       <tr><td>Расходные материалы</td><td>${state.consumables.length} поз.</td><td>—</td><td>${r.costConsumables.toFixed(2)}</td></tr>
       <tr><th colspan="3" style="text-align:right">Итого</th><th>${r.total.toFixed(2)}</th></tr>
     </table>
@@ -1026,8 +1036,8 @@ function exportCSV(){
     rows.push(['Кронштейны', p.result.brackets, p.params.priceBracket.toFixed(2), p.result.costBrackets.toFixed(2)]);
     rows.push(['Наращиватели', p.result.extenders, p.params.priceExtender.toFixed(2), p.result.costExtenders.toFixed(2)]);
   }
-  rows.push(['Утеплитель (м²)', p.result.insulationArea.toFixed(2), p.params.priceInsulation.toFixed(2), p.result.costInsulation.toFixed(2)]);
-  rows.push(['Горизонтальная подсистема (м)', p.result.hSubsystemLen.toFixed(2), p.params.priceHSubsystem.toFixed(2), p.result.costHSubsystem.toFixed(2)]);
+  rows.push([isWet ? 'Мокрый фасад (м²)' : 'Утеплитель (м²)', p.result.insulationArea.toFixed(2), p.params.priceInsulation.toFixed(2), p.result.costInsulation.toFixed(2)]);
+  rows.push([isWet ? 'Фасад (мп)' : 'Горизонтальная подсистема (м)', p.result.hSubsystemLen.toFixed(2), p.params.priceHSubsystem.toFixed(2), p.result.costHSubsystem.toFixed(2)]);
   if(isKnauf){
     rows.push(['Откосы (шт)', p.result.reveals, p.params.priceReveal.toFixed(2), p.result.costReveals.toFixed(2)]);
     rows.push(['Отливы (шт)', p.result.drips, p.params.priceDrip.toFixed(2), p.result.costDrips.toFixed(2)]);
@@ -1074,8 +1084,8 @@ function renderPrintReport(r){
       <tr><td>Крепёж (шт)</td><td>${r.fasteners}</td><td>${parseNum($('#priceFast').value).toFixed(2)}</td><td>${r.costFasteners.toFixed(2)}</td></tr>
       <tr><td>Кронштейны (шт)</td><td>${r.brackets}</td><td>${parseNum($('#priceBracket').value).toFixed(2)}</td><td>${r.costBrackets.toFixed(2)}</td></tr>
       <tr><td>Наращиватели (шт)</td><td>${r.extenders}</td><td>${parseNum($('#priceExtender').value).toFixed(2)}</td><td>${r.costExtenders.toFixed(2)}</td></tr>`}
-      <tr><td>Утеплитель (м²)</td><td>${r.insulationArea.toFixed(2)}</td><td>${parseNum($('#priceInsulation').value).toFixed(2)}</td><td>${r.costInsulation.toFixed(2)}</td></tr>
-      <tr><td>Горизонтальная подсистема (м)</td><td>${r.hSubsystemLen.toFixed(2)}</td><td>${parseNum($('#priceHSubsystem').value).toFixed(2)}</td><td>${r.costHSubsystem.toFixed(2)}</td></tr>${isKnauf ? `
+      <tr><td>${isWet ? 'Мокрый фасад' : 'Утеплитель'} (м²)</td><td>${r.insulationArea.toFixed(2)}</td><td>${parseNum($('#priceInsulation').value).toFixed(2)}</td><td>${r.costInsulation.toFixed(2)}</td></tr>
+      <tr><td>${isWet ? 'Фасад (мп)' : 'Горизонтальная подсистема (м)'}</td><td>${r.hSubsystemLen.toFixed(2)}</td><td>${parseNum($('#priceHSubsystem').value).toFixed(2)}</td><td>${r.costHSubsystem.toFixed(2)}</td></tr>${isKnauf ? `
       <tr><td>Откосы (шт)</td><td>${r.reveals}</td><td>${parseNum($('#priceReveal').value).toFixed(2)}</td><td>${r.costReveals.toFixed(2)}</td></tr>
       <tr><td>Отливы (шт)</td><td>${r.drips}</td><td>${parseNum($('#priceDrip').value).toFixed(2)}</td><td>${r.costDrips.toFixed(2)}</td></tr>` : ''}`;
   state.consumables.forEach(c=>{
