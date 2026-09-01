@@ -88,13 +88,13 @@
         <button class="btn" id="btnPDF">Печать / PDF</button>
       </div>
       <div class="actions" style="margin-top:6px">
-        <button class="btn" id="importProjectCSV">📥 Импорт проекта из CSV</button>
+        <button class="btn" id="importProjectCSV">📥 Импорт проекта (CSV / Excel)</button>
         <button class="btn ghost small" id="tmplProjectCSV" style="padding:4px 10px">Шаблон CSV</button>
-        <input type="file" id="projectFile" accept=".csv,text/csv,text/plain" style="display:none">
+        <input type="file" id="projectFile" accept=".csv,.xlsx,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none">
       </div>
       <details class="hint" style="margin-top:6px">
-        <summary class="muted small" style="cursor:pointer">ⓘ Про импорт CSV</summary>
-        <div class="muted" style="margin-top:6px">Один файл на весь проект. Колонки: «Раздел; Тип; Ширина; Высота; Количество». Раздел — «Стена» или «Проём»; для проёма Тип — «дверь» или «окно» (у стены пусто). Разделитель «;», числа — в текущей единице измерения. Нажмите «Шаблон CSV», чтобы скачать образец.</div>
+        <summary class="muted small" style="cursor:pointer">ⓘ Про импорт CSV / Excel</summary>
+        <div class="muted" style="margin-top:6px">Один файл на весь проект: CSV или Excel (.xlsx). Колонки: «Раздел; Тип; Ширина; Высота; Количество». Раздел — «Стена» или «Проём»; для проёма Тип — «дверь» или «окно» (у стены пусто). В CSV разделитель «;». Числа — в текущей единице измерения. Нажмите «Шаблон CSV», чтобы скачать образец.</div>
       </details>
     </div>
 
@@ -1117,12 +1117,12 @@ function isHeaderRow(cells){ return !cells.some(c => /\d/.test(c)); }
 
 // Один файл на весь проект: строки со «Стена» идут в стены, со «Проём» — в проёмы.
 // Колонки: Раздел; Тип; Ширина; Высота; Количество (у стены Тип пустой).
-function importProjectFromCSV(text){
-  const rows = parseCSV(text);
+// rows — массив строк, каждая строка — массив ячеек (из CSV или из Excel).
+function importProjectRows(rows){
   const walls = [], openings = [];
   rows.forEach((cells, i) => {
     if(i === 0 && isHeaderRow(cells)) return;
-    if(!cells.length) return;
+    if(!cells || !cells.length) return;
     const section = (cells[0] || '').toLowerCase();
     const isWall = section.includes('стен');
     const isOpening = section.includes('про') || section.includes('окн') || section.includes('двер') || section.includes('open');
@@ -1155,13 +1155,107 @@ function importProjectFromCSV(text){
   renderTables(); recalc(); commitHistoryImmediate();
   alert(`Импортировано: стен — ${walls.length}, проёмов — ${openings.length}. Размеры прочитаны в текущей единице (${getUnitCfg().label}).`);
 }
-function readFileInto(inputEl, handler){
+function importProjectFromCSV(text){ importProjectRows(parseCSV(text)); }
+
+// --- Чтение .xlsx без внешних библиотек ------------------------------------
+// .xlsx — это ZIP с XML внутри. Распаковываем встроенным DecompressionStream,
+// XML разбираем встроенным DOMParser. Никаких сторонних зависимостей.
+async function inflateRaw(bytes){
+  if(typeof DecompressionStream === 'undefined') throw new Error('Браузер не поддерживает распаковку .xlsx. Сохраните файл как CSV.');
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+function unzipXlsx(arrayBuffer){
+  const bytes = new Uint8Array(arrayBuffer);
+  const dv = new DataView(arrayBuffer);
+  let eocd = -1;
+  for(let i = bytes.length - 22; i >= 0; i--){ if(dv.getUint32(i, true) === 0x06054b50){ eocd = i; break; } }
+  if(eocd < 0) throw new Error('Файл не похож на .xlsx.');
+  const cdCount = dv.getUint16(eocd + 10, true);
+  let p = dv.getUint32(eocd + 16, true);
+  const files = {};
+  for(let n = 0; n < cdCount; n++){
+    if(dv.getUint32(p, true) !== 0x02014b50) break;
+    const method = dv.getUint16(p + 10, true);
+    const compSize = dv.getUint32(p + 20, true);
+    const nameLen = dv.getUint16(p + 28, true);
+    const extraLen = dv.getUint16(p + 30, true);
+    const commentLen = dv.getUint16(p + 32, true);
+    const localOff = dv.getUint32(p + 42, true);
+    const name = new TextDecoder().decode(bytes.subarray(p + 46, p + 46 + nameLen));
+    files[name] = { method, compSize, localOff };
+    p += 46 + nameLen + extraLen + commentLen;
+  }
+  return { bytes, dv, files };
+}
+async function readXlsxEntry(zip, name){
+  const f = zip.files[name];
+  if(!f) return null;
+  const lh = f.localOff;
+  if(zip.dv.getUint32(lh, true) !== 0x04034b50) return null;
+  const nameLen = zip.dv.getUint16(lh + 26, true);
+  const extraLen = zip.dv.getUint16(lh + 28, true);
+  const dataStart = lh + 30 + nameLen + extraLen;
+  const comp = zip.bytes.subarray(dataStart, dataStart + f.compSize);
+  const raw = f.method === 0 ? comp : await inflateRaw(comp);
+  return new TextDecoder('utf-8').decode(raw);
+}
+function colToIndex(ref){
+  const m = /^([A-Z]+)/.exec(ref || '');
+  if(!m) return 0;
+  let n = 0; for(const ch of m[1]) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1;
+}
+async function parseXLSX(arrayBuffer){
+  const zip = unzipXlsx(arrayBuffer);
+  const shared = [];
+  const ssXml = await readXlsxEntry(zip, 'xl/sharedStrings.xml');
+  if(ssXml){
+    new DOMParser().parseFromString(ssXml, 'application/xml').querySelectorAll('si').forEach(si => {
+      let s = ''; si.querySelectorAll('t').forEach(t => { s += t.textContent; }); shared.push(s);
+    });
+  }
+  let sheetXml = await readXlsxEntry(zip, 'xl/worksheets/sheet1.xml');
+  if(!sheetXml){
+    const any = Object.keys(zip.files).find(n => /^xl\/worksheets\/.*\.xml$/.test(n));
+    if(any) sheetXml = await readXlsxEntry(zip, any);
+  }
+  if(!sheetXml) throw new Error('В книге Excel не найден лист.');
+  const rows = [];
+  new DOMParser().parseFromString(sheetXml, 'application/xml').querySelectorAll('row').forEach(rowEl => {
+    const arr = [];
+    rowEl.querySelectorAll('c').forEach(c => {
+      const col = colToIndex(c.getAttribute('r'));
+      const type = c.getAttribute('t');
+      let val = '';
+      if(type === 'inlineStr'){ const t = c.querySelector('is t'); val = t ? t.textContent : ''; }
+      else { const v = c.querySelector('v'); const raw = v ? v.textContent : ''; val = (type === 's') ? (shared[parseInt(raw,10)] || '') : raw; }
+      arr[col] = val;
+    });
+    for(let i = 0; i < arr.length; i++) if(arr[i] == null) arr[i] = '';
+    rows.push(arr.map(x => String(x).trim()));
+  });
+  return rows;
+}
+async function importProjectFromXLSX(arrayBuffer){
+  try{ importProjectRows(await parseXLSX(arrayBuffer)); }
+  catch(e){ alert('Не удалось прочитать файл Excel: ' + (e && e.message ? e.message : e) + '\nМожно сохранить его как CSV и загрузить.'); }
+}
+
+// Выбор файла проекта: .xlsx читаем как бинарник, остальное — как CSV-текст.
+function readProjectFile(inputEl){
   const f = inputEl.files && inputEl.files[0];
-  if(!f) return;
+  if(!f){ return; }
+  const isXlsx = /\.xlsx$/i.test(f.name || '');
   const reader = new FileReader();
-  reader.onload = e => { try{ handler(String(e.target.result)); }catch(err){ alert('Не удалось прочитать файл.'); } };
   reader.onerror = () => alert('Не удалось прочитать файл.');
-  reader.readAsText(f, 'utf-8');
+  if(isXlsx){
+    reader.onload = e => importProjectFromXLSX(e.target.result);
+    reader.readAsArrayBuffer(f);
+  }else{
+    reader.onload = e => { try{ importProjectFromCSV(String(e.target.result)); }catch(err){ alert('Не удалось прочитать файл.'); } };
+    reader.readAsText(f, 'utf-8');
+  }
   inputEl.value = '';   // сбросить, чтобы повторный выбор того же файла сработал
 }
 function downloadTextFile(filename, text){
@@ -1242,7 +1336,7 @@ on($('#addOpening'),'click', addOpening);
 on($('#addConsumable'),'click', addConsumable);
 // Импорт проекта из CSV (один файл на стены + проёмы)
 on($('#importProjectCSV'),'click', ()=> $('#projectFile').click());
-on($('#projectFile'),'change', e=> readFileInto(e.target, importProjectFromCSV));
+on($('#projectFile'),'change', e=> readProjectFile(e.target));
 on($('#tmplProjectCSV'),'click', ()=> { const f = formatForUnit;
   downloadTextFile('project-template.csv',
     `Раздел;Тип;Ширина;Высота;Количество\n`+
