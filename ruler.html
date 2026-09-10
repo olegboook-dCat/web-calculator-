@@ -24,7 +24,7 @@
           <div class="actions" style="margin-top:8px;align-items:center">
             <span class="muted small">Лист — ширина:</span>
             <input type="text" id="tapeSheet" inputmode="decimal" value="1220" style="max-width:90px">
-            <select id="tapeSheetUnit" style="max-width:64px;padding:6px"><option value="mm">мм</option><option value="cm">см</option><option value="m">м</option></select>
+            <button class="btn ghost small" id="tapeSheetUnitToggle" style="padding:3px 10px" title="Единицы листа (ширина и высота)">мм</button>
             <span style="display:inline-flex;flex-direction:column;gap:4px">
               <button class="btn ghost small" id="tapeSheet1220" style="padding:2px 10px">1220</button>
               <button class="btn ghost small" id="tapeSheet1500" style="padding:2px 10px">1500</button>
@@ -33,7 +33,6 @@
           <div class="actions" style="margin-top:8px;align-items:center">
             <span class="muted small">Лист — высота:</span>
             <input type="text" id="tapeHeightStd" inputmode="decimal" value="4000" style="max-width:90px">
-            <select id="tapeSheetHUnit" style="max-width:64px;padding:6px"><option value="mm">мм</option><option value="cm">см</option><option value="m">м</option></select>
           </div>
           <div class="hr" style="margin:8px 0"></div>
           <div class="actions" style="margin-top:8px;align-items:center">
@@ -56,7 +55,7 @@
           </div>
           <div style="margin-top:10px">
             <span class="pill" id="tapeGroupPill">Текущая группа (ширина): <b id="tapeGroupSum">0</b></span>
-            <span class="pill">Сумма отсечек: <b id="tapeCutsSum">0</b></span>
+            <span class="pill">Сумма отсечек: <b id="tapeCutsSum">0</b> <button class="btn ghost small" id="tapeCutsUnitToggle" style="padding:1px 8px" title="Переключить единицы">мм</button></span>
             <span class="pill">Площадь тек. группы: <b id="tapeGroupArea">0.00</b> м²</span>
             <span class="pill">Итого площадь: <b id="tapeAreaTotal">0.00</b> м²</span>
             <span class="pill" style="font-size:16px">Общий итог: <b id="tapeGrand">0</b> <button class="btn ghost small" id="tapeUnitToggle" style="padding:1px 8px" title="Переключить единицы">мм</button></span>
@@ -100,10 +99,13 @@ const TAPE_SHEET_KEY = 'facadeTapeSheetLen';
 const TAPE_HSTD_KEY = 'facadeTapeHeightStd';       // высота листа (габарит)
 const TAPE_GROUPH_KEY = 'facadeTapeGroupHeight';   // высота текущего элемента
 const TAPE_UNIT_KEY = 'facadeTapeGrandUnit';       // единицы «Общего итога»: mm | m
-const TAPE_SHEET_UNIT_KEY = 'facadeTapeSheetUnit'; // единицы ширины листа
-const TAPE_SHEETH_UNIT_KEY = 'facadeTapeSheetHUnit'; // единицы высоты листа
+const TAPE_SHEET_UNIT_KEY = 'facadeTapeSheetUnit'; // общие единицы листа (ширина+высота)
 const TAPE_GROUPH_UNIT_KEY = 'facadeTapeGroupHUnit'; // единицы высоты элемента
+const TAPE_CUTSUNIT_KEY = 'facadeTapeCutsUnit'; // единицы «Суммы отсечек»
+let sheetUnit = 'mm';      // общая единица для ширины и высоты листа
+let tapeCutsUnit = 'mm';   // единица «Суммы отсечек»
 function unitFactor(u){ return u === 'm' ? 1000 : (u === 'cm' ? 10 : 1); }  // → в мм
+function unitLabel(u){ return u === 'm' ? 'м' : (u === 'cm' ? 'см' : 'мм'); }
 function groupHeightMm(){ return parseNum($('#tapeGroupH').value) * unitFactor($('#tapeGroupHUnit').value); }
 const TAPE_NEAR_RATIO = 0.95;   // доля ширины листа, с которой поле краснеет
 let tapeUnit = 'mm';
@@ -128,8 +130,8 @@ function cutSum(cut){ return (cut && Array.isArray(cut.items) ? cut.items : []).
 // Габариты листа. Ширина: сумма кусков ≥95% ширины листа → красный.
 // Высота: высота элемента > высоты листа → фиолетовый.
 // Габариты листа приводим к мм по выбранной единице (пруски/высота элемента — в мм).
-function tapeSheetLen(){ return Math.max(0, parseNum($('#tapeSheet').value) * unitFactor($('#tapeSheetUnit').value)); }
-function tapeSheetH(){ return Math.max(0, parseNum($('#tapeHeightStd').value) * unitFactor($('#tapeSheetHUnit').value)); }
+function tapeSheetLen(){ return Math.max(0, parseNum($('#tapeSheet').value) * unitFactor(sheetUnit)); }
+function tapeSheetH(){ return Math.max(0, parseNum($('#tapeHeightStd').value) * unitFactor(sheetUnit)); }
 function nearLimit(sum){ const s = tapeSheetLen(); return s > 0 && sum >= s * TAPE_NEAR_RATIO; }
 function overHeight(h){ const H = tapeSheetH(); return H > 0 && h > H; }
 // Площадь: (ширина, мм) × (высота, мм) → м² (÷ 1 000 000).
@@ -147,11 +149,11 @@ function normalizeCut(el){
 function updateTapeTotals(){
   const g = tapeGroupSum(), c = tapeCutsSum();
   $('#tapeGroupSum').textContent = formatTapeNumber(g);
-  $('#tapeCutsSum').textContent = formatTapeNumber(c);
+  $('#tapeCutsSum').textContent = formatTapeNumber(c / unitFactor(tapeCutsUnit));
+  $('#tapeCutsUnitToggle').textContent = unitLabel(tapeCutsUnit);
   const grand = g + c;                                     // отсечки + текущая группа (линейно)
-  const factor = tapeUnit === 'm' ? 1000 : (tapeUnit === 'cm' ? 10 : 1);
-  $('#tapeGrand').textContent = formatTapeNumber(grand / factor);
-  $('#tapeUnitToggle').textContent = tapeUnit === 'm' ? 'м' : (tapeUnit === 'cm' ? 'см' : 'мм');
+  $('#tapeGrand').textContent = formatTapeNumber(grand / unitFactor(tapeUnit));
+  $('#tapeUnitToggle').textContent = unitLabel(tapeUnit);
   $('#tapeGroupArea').textContent = formatArea(tapeGroupArea());
   $('#tapeAreaTotal').textContent = formatArea(tapeCutsArea() + tapeGroupArea());  // отсечки + текущая
   $('#tapeGroupPill').classList.toggle('near-limit', nearLimit(g));
@@ -277,25 +279,22 @@ function clearTape(){
 function saveTapeSheet(){ try{ localStorage.setItem(TAPE_SHEET_KEY, $('#tapeSheet').value); }catch(e){} }
 function saveSheetH(){ try{ localStorage.setItem(TAPE_HSTD_KEY, $('#tapeHeightStd').value); }catch(e){} }
 function saveGroupH(){ try{ localStorage.setItem(TAPE_GROUPH_KEY, $('#tapeGroupH').value); }catch(e){} }
-function saveSheetUnit(){ try{ localStorage.setItem(TAPE_SHEET_UNIT_KEY, $('#tapeSheetUnit').value); }catch(e){} }
-function saveSheetHUnit(){ try{ localStorage.setItem(TAPE_SHEETH_UNIT_KEY, $('#tapeSheetHUnit').value); }catch(e){} }
+function saveSheetUnit(){ try{ localStorage.setItem(TAPE_SHEET_UNIT_KEY, sheetUnit); }catch(e){} }
 function saveGroupHUnit(){ try{ localStorage.setItem(TAPE_GROUPH_UNIT_KEY, $('#tapeGroupHUnit').value); }catch(e){} }
-// Кнопки 1220/1500 задают ширину в мм.
-function setTapeSheet(v){ $('#tapeSheet').value = v; $('#tapeSheetUnit').value = 'mm'; sheetUnitPrev = 'mm'; saveTapeSheet(); saveSheetUnit(); updateTapeTotals(); renderTapeCuts(); }
-// При смене единицы пересчитываем показанное значение, сохраняя физический размер.
-let sheetUnitPrev = 'mm', sheetHUnitPrev = 'mm', groupHUnitPrev = 'mm';
-function changeSheetUnit(){
-  const nu = $('#tapeSheetUnit').value;
-  const mm = parseNum($('#tapeSheet').value) * unitFactor(sheetUnitPrev);
-  $('#tapeSheet').value = formatTapeNumber(mm / unitFactor(nu));
-  sheetUnitPrev = nu; saveTapeSheet(); saveSheetUnit(); updateTapeTotals(); renderTapeCuts();
+function saveCutsUnit(){ try{ localStorage.setItem(TAPE_CUTSUNIT_KEY, tapeCutsUnit); }catch(e){} }
+// Общая единица листа: при смене пересчитываем и ширину, и высоту (физразмер сохраняется).
+function setSheetUnit(nu){
+  const wmm = parseNum($('#tapeSheet').value) * unitFactor(sheetUnit);
+  const hmm = parseNum($('#tapeHeightStd').value) * unitFactor(sheetUnit);
+  sheetUnit = nu;
+  $('#tapeSheet').value = formatTapeNumber(wmm / unitFactor(nu));
+  $('#tapeHeightStd').value = formatTapeNumber(hmm / unitFactor(nu));
+  $('#tapeSheetUnitToggle').textContent = unitLabel(nu);
+  saveTapeSheet(); saveSheetH(); saveSheetUnit(); updateTapeTotals(); renderTapeCuts();
 }
-function changeSheetHUnit(){
-  const nu = $('#tapeSheetHUnit').value;
-  const mm = parseNum($('#tapeHeightStd').value) * unitFactor(sheetHUnitPrev);
-  $('#tapeHeightStd').value = formatTapeNumber(mm / unitFactor(nu));
-  sheetHUnitPrev = nu; saveSheetH(); saveSheetHUnit(); updateTapeTotals(); renderTapeCuts();
-}
+// Кнопки 1220/1500 задают ширину в мм (единица листа переключается на мм).
+function setTapeSheet(v){ setSheetUnit('mm'); $('#tapeSheet').value = v; saveTapeSheet(); updateTapeTotals(); renderTapeCuts(); }
+let groupHUnitPrev = 'mm';
 function changeGroupHUnit(){
   const nu = $('#tapeGroupHUnit').value;
   const mm = parseNum($('#tapeGroupH').value) * unitFactor(groupHUnitPrev);
@@ -310,20 +309,22 @@ on($('#tapeInput'),'keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addT
 on($('#tapeSheet'),'input', e=>{ saveTapeSheet(); updateTapeTotals(); renderTapeCuts(); });
 on($('#tapeSheet1220'),'click', e=>{ e.preventDefault(); setTapeSheet('1220'); });
 on($('#tapeSheet1500'),'click', e=>{ e.preventDefault(); setTapeSheet('1500'); });
-on($('#tapeSheetUnit'),'change', e=>{ changeSheetUnit(); });
-on($('#tapeSheetHUnit'),'change', e=>{ changeSheetHUnit(); });
+const CYCLE = ['mm','cm','m'];
+on($('#tapeSheetUnitToggle'),'click', e=>{ e.preventDefault(); setSheetUnit(CYCLE[(CYCLE.indexOf(sheetUnit) + 1) % CYCLE.length]); });
 // смена высоты листа: пересчитать фиолетовую подсветку у группы и всех отсечек
 on($('#tapeHeightStd'),'input', e=>{ saveSheetH(); updateTapeTotals(); renderTapeCuts(); });
 on($('#tapeGroupH'),'input', e=>{ saveGroupH(); updateTapeTotals(); });
 on($('#tapeGroupHUnit'),'change', e=>{ changeGroupHUnit(); });
-on($('#tapeUnitToggle'),'click', e=>{ e.preventDefault(); const order = ['mm','cm','m']; tapeUnit = order[(order.indexOf(tapeUnit) + 1) % order.length]; try{ localStorage.setItem(TAPE_UNIT_KEY, tapeUnit); }catch(err){} updateTapeTotals(); });
+on($('#tapeUnitToggle'),'click', e=>{ e.preventDefault(); tapeUnit = CYCLE[(CYCLE.indexOf(tapeUnit) + 1) % CYCLE.length]; try{ localStorage.setItem(TAPE_UNIT_KEY, tapeUnit); }catch(err){} updateTapeTotals(); });
+on($('#tapeCutsUnitToggle'),'click', e=>{ e.preventDefault(); tapeCutsUnit = CYCLE[(CYCLE.indexOf(tapeCutsUnit) + 1) % CYCLE.length]; saveCutsUnit(); updateTapeTotals(); });
 
 try{ const sv = localStorage.getItem(TAPE_SHEET_KEY); if(sv != null) $('#tapeSheet').value = sv; }catch(e){}
 try{ const hs = localStorage.getItem(TAPE_HSTD_KEY); if(hs != null) $('#tapeHeightStd').value = hs; }catch(e){}
 try{ const gh = localStorage.getItem(TAPE_GROUPH_KEY); if(gh != null) $('#tapeGroupH').value = gh; }catch(e){}
 try{ const u = localStorage.getItem(TAPE_UNIT_KEY); if(u === 'm' || u === 'cm' || u === 'mm') tapeUnit = u; }catch(e){}
-try{ const su = localStorage.getItem(TAPE_SHEET_UNIT_KEY); if(su==='m'||su==='cm'||su==='mm'){ $('#tapeSheetUnit').value = su; sheetUnitPrev = su; } }catch(e){}
-try{ const shu = localStorage.getItem(TAPE_SHEETH_UNIT_KEY); if(shu==='m'||shu==='cm'||shu==='mm'){ $('#tapeSheetHUnit').value = shu; sheetHUnitPrev = shu; } }catch(e){}
+try{ const cu = localStorage.getItem(TAPE_CUTSUNIT_KEY); if(cu==='m'||cu==='cm'||cu==='mm') tapeCutsUnit = cu; }catch(e){}
+try{ const su = localStorage.getItem(TAPE_SHEET_UNIT_KEY); if(su==='m'||su==='cm'||su==='mm') sheetUnit = su; }catch(e){}
+$('#tapeSheetUnitToggle').textContent = unitLabel(sheetUnit);
 try{ const ghu = localStorage.getItem(TAPE_GROUPH_UNIT_KEY); if(ghu==='m'||ghu==='cm'||ghu==='mm'){ $('#tapeGroupHUnit').value = ghu; groupHUnitPrev = ghu; } }catch(e){}
 tapeEntries = loadTapeArray(TAPE_KEY);
 tapeCuts = loadTapeArray(TAPE_CUTS_KEY).map(normalizeCut);   // поддержка старого формата
