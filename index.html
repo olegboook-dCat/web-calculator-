@@ -305,7 +305,7 @@
         <div style="margin-top:12px">
           <details class="hint" style="margin-top:0">
             <summary class="muted small" style="cursor:pointer">ⓘ Подсказка</summary>
-            <div class="muted" style="margin-top:6px">Отдельный инструмент для замеров — не связан с расчётом фасада выше. Вводите число и нажимайте «+ Добавить» (или Enter) — оно попадёт в текущую группу, её сумма считается сама. Кнопка «✂ Отсечь» закрывает группу: её сумма и высота записываются отдельной строкой с порядковым номером (Отсечка №1, №2 …), а ввод обнуляется для следующей. Все отсечки складываются в общий итог (плюс текущая группа). Числа и отсечки можно править и удалять. Лист задаётся габаритами «Ширина × Высота» (напр. 1220 × 4000). Ширина элемента (сумма кусков): когда достигает 95% ширины листа — поле красное. Высота элемента: если больше высоты листа — поле фиолетовое. И у текущей группы, и у каждой отсечки высота своя.</div>
+            <div class="muted" style="margin-top:6px">Отдельный инструмент для замеров — не связан с расчётом фасада выше. Вводите число и нажимайте «+ Добавить» (или Enter) — оно попадёт в текущую группу, её сумма считается сама. Кнопка «✂ Отсечь» закрывает группу: её сумма и высота записываются отдельной строкой с порядковым номером (Отсечка №1, №2 …), а ввод обнуляется для следующей. Все отсечки складываются в общий итог (плюс текущая группа). Числа и отсечки можно править и удалять. Лист задаётся габаритами «Ширина × Высота» (напр. 1220 × 4000). Ширина элемента (сумма кусков): когда достигает 95% ширины листа — поле красное. Высота элемента: если больше высоты листа — поле фиолетовое. И у текущей группы, и у каждой отсечки высота своя. Площадь каждой отсечки = ширина × высота, переведённая в м² (показана как «S = … м²»); их сумма плюс текущая группа — в строке «Итого площадь». У «Общего итога» есть переключатель единиц мм ↔ м.</div>
           </details>
           <div class="actions" style="margin-top:8px;align-items:center">
             <span class="muted small">Лист — ширина (мм):</span>
@@ -327,7 +327,9 @@
           <div style="margin-top:10px">
             <span class="pill" id="tapeGroupPill">Текущая группа (ширина): <b id="tapeGroupSum">0</b></span>
             <span class="pill">Сумма отсечек: <b id="tapeCutsSum">0</b></span>
-            <span class="pill" style="font-size:16px">Общий итог: <b id="tapeGrand">0</b></span>
+            <span class="pill">Площадь тек. группы: <b id="tapeGroupArea">0.00</b> м²</span>
+            <span class="pill">Итого площадь: <b id="tapeAreaTotal">0.00</b> м²</span>
+            <span class="pill" style="font-size:16px">Общий итог: <b id="tapeGrand">0</b> <button class="btn ghost small" id="tapeUnitToggle" style="padding:1px 8px" title="Переключить единицы">мм</button></span>
           </div>
           <div class="table-scroll">
           <table id="tapeTbl">
@@ -1436,7 +1438,9 @@ const TAPE_CUTS_KEY = 'facadeTapeCalculatorCuts';
 const TAPE_SHEET_KEY = 'facadeTapeSheetLen';
 const TAPE_HSTD_KEY = 'facadeTapeHeightStd';       // высота листа (габарит)
 const TAPE_GROUPH_KEY = 'facadeTapeGroupHeight';   // высота текущего элемента
+const TAPE_UNIT_KEY = 'facadeTapeGrandUnit';       // единицы «Общего итога»: mm | m
 const TAPE_NEAR_RATIO = 0.95;   // доля ширины листа, с которой поле краснеет
+let tapeUnit = 'mm';
 let tapeEntries = [];
 let tapeCuts = [];
 
@@ -1461,6 +1465,11 @@ function tapeSheetLen(){ return Math.max(0, parseNum($('#tapeSheet').value)); }
 function tapeSheetH(){ return Math.max(0, parseNum($('#tapeHeightStd').value)); }
 function nearLimit(sum){ const s = tapeSheetLen(); return s > 0 && sum >= s * TAPE_NEAR_RATIO; }
 function overHeight(h){ const H = tapeSheetH(); return H > 0 && h > H; }
+// Площадь: (ширина, мм) × (высота, мм) → м² (÷ 1 000 000).
+function cutArea(cut){ return cutSum(cut) * parseNum(cut.height) / 1e6; }
+function tapeGroupArea(){ return tapeGroupSum() * parseNum($('#tapeGroupH').value) / 1e6; }
+function tapeCutsArea(){ return tapeCuts.reduce((s,c)=> s + cutArea(c), 0); }
+function formatArea(n){ return (Number.isFinite(n) ? n : 0).toFixed(2); }
 function tapeCutsSum(){ return tapeCuts.reduce((s,c)=> s + cutSum(c), 0); }
 // Приводим отсечку к виду {name, items:[...]}. Поддерживаем старый формат (просто число).
 function normalizeCut(el){
@@ -1472,7 +1481,11 @@ function updateTapeTotals(){
   const g = tapeGroupSum(), c = tapeCutsSum();
   $('#tapeGroupSum').textContent = formatTapeNumber(g);
   $('#tapeCutsSum').textContent = formatTapeNumber(c);
-  $('#tapeGrand').textContent = formatTapeNumber(g + c);   // отсечки + текущая группа
+  const grand = g + c;                                     // отсечки + текущая группа (линейно)
+  $('#tapeGrand').textContent = tapeUnit === 'm' ? formatTapeNumber(grand / 1000) : formatTapeNumber(grand);
+  $('#tapeUnitToggle').textContent = tapeUnit === 'm' ? 'м' : 'мм';
+  $('#tapeGroupArea').textContent = formatArea(tapeGroupArea());
+  $('#tapeAreaTotal').textContent = formatArea(tapeCutsArea() + tapeGroupArea());  // отсечки + текущая
   $('#tapeGroupPill').classList.toggle('near-limit', nearLimit(g));
   $('#tapeGroupH').classList.toggle('over-height', overHeight(parseNum($('#tapeGroupH').value)));
 }
@@ -1510,7 +1523,11 @@ function renderTapeCuts(){
     hWrap.innerHTML = `<span class="muted small">выс.</span><input type="text" inputmode="decimal" placeholder="мм" value="${cut.height ? cut.height : ''}">`;
     const hInp = hWrap.querySelector('input');
     hInp.classList.toggle('over-height', overHeight(parseNum(cut.height)));
-    on(hInp,'input', e=>{ cut.height = parseNum(e.target.value); hInp.classList.toggle('over-height', overHeight(cut.height)); saveTapeCuts(); });
+    // площадь этой отсечки (м²)
+    const areaEl = document.createElement('span'); areaEl.className = 'muted small cut-area';
+    const setArea = ()=>{ areaEl.textContent = 'S = ' + formatArea(cutArea(cut)) + ' м²'; };
+    setArea();
+    on(hInp,'input', e=>{ cut.height = parseNum(e.target.value); hInp.classList.toggle('over-height', overHeight(cut.height)); setArea(); updateTapeTotals(); saveTapeCuts(); });
     const toggle = document.createElement('button');
     toggle.type = 'button'; toggle.className = 'btn ghost small'; toggle.style.padding = '2px 8px';
     const setToggle = ()=>{ toggle.textContent = (cut._open ? '▾' : '▸') + ' история (' + cut.items.length + ')'; };
@@ -1529,7 +1546,7 @@ function renderTapeCuts(){
       inp.addEventListener('blur', commit);
     });
 
-    head.appendChild(noBtn); head.appendChild(nameView); head.appendChild(sumEl); head.appendChild(hWrap); head.appendChild(toggle); head.appendChild(del);
+    head.appendChild(noBtn); head.appendChild(nameView); head.appendChild(sumEl); head.appendChild(hWrap); head.appendChild(areaEl); head.appendChild(toggle); head.appendChild(del);
     block.appendChild(head);
 
     // --- история чисел (свёрнута по умолчанию), каждое со своим номером ---
@@ -1537,7 +1554,7 @@ function renderTapeCuts(){
     cut.items.forEach((val, ii)=>{
       const item = document.createElement('span'); item.className = 'item';
       item.innerHTML = `<span class="item-no">${ii + 1}.</span><input type="text" inputmode="decimal" value="${val}"><button class="btn ghost">✕</button>`;
-      on(item.querySelector('input'),'input', e=>{ cut.items[ii] = parseNum(e.target.value); const cs = cutSum(cut); sumEl.textContent = formatTapeNumber(cs); sumEl.classList.toggle('near-limit', nearLimit(cs)); updateTapeTotals(); saveTapeCuts(); });
+      on(item.querySelector('input'),'input', e=>{ cut.items[ii] = parseNum(e.target.value); const cs = cutSum(cut); sumEl.textContent = formatTapeNumber(cs); sumEl.classList.toggle('near-limit', nearLimit(cs)); setArea(); updateTapeTotals(); saveTapeCuts(); });
       item.querySelector('button').addEventListener('click', e=>{ e.preventDefault(); cut.items.splice(ii, 1); saveTapeCuts(); renderTapeCuts(); });
       items.appendChild(item);
     });
@@ -1594,10 +1611,12 @@ on($('#tapeSheet1500'),'click', e=>{ e.preventDefault(); setTapeSheet('1500'); }
 // смена высоты листа: пересчитать фиолетовую подсветку у группы и всех отсечек
 on($('#tapeHeightStd'),'input', e=>{ saveSheetH(); updateTapeTotals(); renderTapeCuts(); });
 on($('#tapeGroupH'),'input', e=>{ saveGroupH(); updateTapeTotals(); });
+on($('#tapeUnitToggle'),'click', e=>{ e.preventDefault(); tapeUnit = (tapeUnit === 'm') ? 'mm' : 'm'; try{ localStorage.setItem(TAPE_UNIT_KEY, tapeUnit); }catch(err){} updateTapeTotals(); });
 
 try{ const sv = localStorage.getItem(TAPE_SHEET_KEY); if(sv != null) $('#tapeSheet').value = sv; }catch(e){}
 try{ const hs = localStorage.getItem(TAPE_HSTD_KEY); if(hs != null) $('#tapeHeightStd').value = hs; }catch(e){}
 try{ const gh = localStorage.getItem(TAPE_GROUPH_KEY); if(gh != null) $('#tapeGroupH').value = gh; }catch(e){}
+try{ const u = localStorage.getItem(TAPE_UNIT_KEY); if(u === 'm' || u === 'mm') tapeUnit = u; }catch(e){}
 tapeEntries = loadTapeArray(TAPE_KEY);
 tapeCuts = loadTapeArray(TAPE_CUTS_KEY).map(normalizeCut);   // поддержка старого формата
 renderTape();
