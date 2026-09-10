@@ -52,6 +52,9 @@
     .pill.near-limit b{color:#f87171}
     .cut-sum.near-limit{color:#f87171}
     input.over-height{outline:2px solid #a855f7;background:#1e1233;color:#e9d5ff}
+    .cut-h-wrap{display:flex;align-items:center;gap:4px}
+    .cut-h-wrap input{width:72px}
+    .cut-h-wrap .muted{white-space:nowrap}
     .knauf-only{display:none}
     body.knauf-mode .knauf-only{display:block}
     body.knauf-mode .grid-2.knauf-only,body.knauf-mode .grid-3.knauf-only{display:grid}
@@ -302,27 +305,27 @@
         <div style="margin-top:12px">
           <details class="hint" style="margin-top:0">
             <summary class="muted small" style="cursor:pointer">ⓘ Подсказка</summary>
-            <div class="muted" style="margin-top:6px">Отдельный инструмент для замеров — не связан с расчётом фасада выше. Вводите число и нажимайте «+ Добавить» (или Enter) — оно попадёт в текущую группу, её сумма считается сама. Кнопка «✂ Отсечь» закрывает группу: её сумма записывается отдельной строкой с порядковым номером (Отсечка №1, №2 …), а ввод обнуляется для следующей. Все отсечки складываются в общий итог (плюс текущая группа). Числа и отсечки можно править и удалять. «Исходный лист» — длина заготовки; когда сумма (текущей группы или отсечки) достигает 95% длины листа, поле подсвечивается красным. «Высота факт» сравнивается со «Стандартом высоты» (по умолчанию 4000 мм): если факт больше стандарта — поле подсвечивается фиолетовым.</div>
+            <div class="muted" style="margin-top:6px">Отдельный инструмент для замеров — не связан с расчётом фасада выше. Вводите число и нажимайте «+ Добавить» (или Enter) — оно попадёт в текущую группу, её сумма считается сама. Кнопка «✂ Отсечь» закрывает группу: её сумма и высота записываются отдельной строкой с порядковым номером (Отсечка №1, №2 …), а ввод обнуляется для следующей. Все отсечки складываются в общий итог (плюс текущая группа). Числа и отсечки можно править и удалять. Лист задаётся габаритами «Ширина × Высота» (напр. 1220 × 4000). Ширина элемента (сумма кусков): когда достигает 95% ширины листа — поле красное. Высота элемента: если больше высоты листа — поле фиолетовое. И у текущей группы, и у каждой отсечки высота своя.</div>
           </details>
           <div class="actions" style="margin-top:8px;align-items:center">
-            <span class="muted small">Исходный лист:</span>
-            <input type="text" id="tapeSheet" inputmode="decimal" value="1220" style="max-width:110px">
+            <span class="muted small">Лист — ширина (мм):</span>
+            <input type="text" id="tapeSheet" inputmode="decimal" value="1220" style="max-width:100px">
             <button class="btn ghost small" id="tapeSheet1220" style="padding:4px 10px">1220</button>
             <button class="btn ghost small" id="tapeSheet1500" style="padding:4px 10px">1500</button>
-          </div>
-          <div class="actions" style="margin-top:8px;align-items:center">
-            <span class="muted small">Стандарт высоты (мм):</span>
-            <input type="text" id="tapeHeightStd" inputmode="decimal" value="4000" style="max-width:110px">
-            <span class="muted small">Высота факт (мм):</span>
-            <input type="text" id="tapeHeightFact" inputmode="decimal" placeholder="мм" style="max-width:110px">
+            <span class="muted small">высота (мм):</span>
+            <input type="text" id="tapeHeightStd" inputmode="decimal" value="4000" style="max-width:100px">
           </div>
           <div class="actions" style="margin-top:8px">
             <input type="text" id="tapeInput" inputmode="decimal" placeholder="Введите число" style="max-width:200px">
             <button class="btn primary" id="tapeAdd">+ Добавить</button>
             <button class="btn" id="tapeCut">✂ Отсечь</button>
           </div>
+          <div class="actions" style="margin-top:8px;align-items:center">
+            <span class="muted small">Высота элемента (мм):</span>
+            <input type="text" id="tapeGroupH" inputmode="decimal" placeholder="мм" style="max-width:110px">
+          </div>
           <div style="margin-top:10px">
-            <span class="pill" id="tapeGroupPill">Текущая группа: <b id="tapeGroupSum">0</b></span>
+            <span class="pill" id="tapeGroupPill">Текущая группа (ширина): <b id="tapeGroupSum">0</b></span>
             <span class="pill">Сумма отсечек: <b id="tapeCutsSum">0</b></span>
             <span class="pill" style="font-size:16px">Общий итог: <b id="tapeGrand">0</b></span>
           </div>
@@ -1431,9 +1434,9 @@ updateUndoRedoButtons();
 const TAPE_KEY = 'facadeTapeCalculatorEntries';
 const TAPE_CUTS_KEY = 'facadeTapeCalculatorCuts';
 const TAPE_SHEET_KEY = 'facadeTapeSheetLen';
-const TAPE_HSTD_KEY = 'facadeTapeHeightStd';
-const TAPE_HFACT_KEY = 'facadeTapeHeightFact';
-const TAPE_NEAR_RATIO = 0.95;   // доля длины листа, с которой поле краснеет
+const TAPE_HSTD_KEY = 'facadeTapeHeightStd';       // высота листа (габарит)
+const TAPE_GROUPH_KEY = 'facadeTapeGroupHeight';   // высота текущего элемента
+const TAPE_NEAR_RATIO = 0.95;   // доля ширины листа, с которой поле краснеет
 let tapeEntries = [];
 let tapeCuts = [];
 
@@ -1447,20 +1450,23 @@ function loadTapeArray(key){
 function saveTapeEntries(){ try{ localStorage.setItem(TAPE_KEY, JSON.stringify(tapeEntries)); }catch(e){} }
 // Сохраняем только {name, items}; служебный флаг раскрытия (_open) не пишем,
 // чтобы после перезагрузки история была свёрнута по умолчанию.
-function saveTapeCuts(){ try{ localStorage.setItem(TAPE_CUTS_KEY, JSON.stringify(tapeCuts.map(c=>({name:c.name||'', items:c.items})))); }catch(e){} }
+function saveTapeCuts(){ try{ localStorage.setItem(TAPE_CUTS_KEY, JSON.stringify(tapeCuts.map(c=>({name:c.name||'', items:c.items, height:c.height||0})))); }catch(e){} }
 function formatTapeNumber(n){ return String(Math.round(n*1000)/1000); }
 
 function tapeGroupSum(){ return tapeEntries.reduce((s,v)=> s + parseNum(v), 0); }
 function cutSum(cut){ return (cut && Array.isArray(cut.items) ? cut.items : []).reduce((s,v)=> s + parseNum(v), 0); }
-// Длина исходного листа и признак «сумма приближается к пределу» (≥95% листа).
+// Габариты листа. Ширина: сумма кусков ≥95% ширины листа → красный.
+// Высота: высота элемента > высоты листа → фиолетовый.
 function tapeSheetLen(){ return Math.max(0, parseNum($('#tapeSheet').value)); }
+function tapeSheetH(){ return Math.max(0, parseNum($('#tapeHeightStd').value)); }
 function nearLimit(sum){ const s = tapeSheetLen(); return s > 0 && sum >= s * TAPE_NEAR_RATIO; }
+function overHeight(h){ const H = tapeSheetH(); return H > 0 && h > H; }
 function tapeCutsSum(){ return tapeCuts.reduce((s,c)=> s + cutSum(c), 0); }
 // Приводим отсечку к виду {name, items:[...]}. Поддерживаем старый формат (просто число).
 function normalizeCut(el){
-  if(el && Array.isArray(el.items)) return { name: String(el.name || ''), items: el.items.map(x=>parseNum(x)) };
-  if(el && typeof el === 'object' && 'value' in el) return { name: String(el.name || ''), items: [parseNum(el.value)] };
-  return { name: '', items: [parseNum(el)] };
+  if(el && Array.isArray(el.items)) return { name: String(el.name || ''), items: el.items.map(x=>parseNum(x)), height: parseNum(el.height) };
+  if(el && typeof el === 'object' && 'value' in el) return { name: String(el.name || ''), items: [parseNum(el.value)], height: parseNum(el.height) };
+  return { name: '', items: [parseNum(el)], height: 0 };
 }
 function updateTapeTotals(){
   const g = tapeGroupSum(), c = tapeCutsSum();
@@ -1468,6 +1474,7 @@ function updateTapeTotals(){
   $('#tapeCutsSum').textContent = formatTapeNumber(c);
   $('#tapeGrand').textContent = formatTapeNumber(g + c);   // отсечки + текущая группа
   $('#tapeGroupPill').classList.toggle('near-limit', nearLimit(g));
+  $('#tapeGroupH').classList.toggle('over-height', overHeight(parseNum($('#tapeGroupH').value)));
 }
 
 function renderTape(){
@@ -1498,6 +1505,12 @@ function renderTapeCuts(){
     const nameView = document.createElement('span'); nameView.className = 'cut-name-view'; nameView.textContent = cut.name || '';
     const sumEl = document.createElement('b'); sumEl.className = 'cut-sum'; sumEl.textContent = formatTapeNumber(cutSum(cut));
     sumEl.classList.toggle('near-limit', nearLimit(cutSum(cut)));
+    // высота элемента этой отсечки (фиолетовый, если больше высоты листа)
+    const hWrap = document.createElement('span'); hWrap.className = 'cut-h-wrap';
+    hWrap.innerHTML = `<span class="muted small">выс.</span><input type="text" inputmode="decimal" placeholder="мм" value="${cut.height ? cut.height : ''}">`;
+    const hInp = hWrap.querySelector('input');
+    hInp.classList.toggle('over-height', overHeight(parseNum(cut.height)));
+    on(hInp,'input', e=>{ cut.height = parseNum(e.target.value); hInp.classList.toggle('over-height', overHeight(cut.height)); saveTapeCuts(); });
     const toggle = document.createElement('button');
     toggle.type = 'button'; toggle.className = 'btn ghost small'; toggle.style.padding = '2px 8px';
     const setToggle = ()=>{ toggle.textContent = (cut._open ? '▾' : '▸') + ' история (' + cut.items.length + ')'; };
@@ -1516,7 +1529,7 @@ function renderTapeCuts(){
       inp.addEventListener('blur', commit);
     });
 
-    head.appendChild(noBtn); head.appendChild(nameView); head.appendChild(sumEl); head.appendChild(toggle); head.appendChild(del);
+    head.appendChild(noBtn); head.appendChild(nameView); head.appendChild(sumEl); head.appendChild(hWrap); head.appendChild(toggle); head.appendChild(del);
     block.appendChild(head);
 
     // --- история чисел (свёрнута по умолчанию), каждое со своим номером ---
@@ -1551,8 +1564,8 @@ function addTapeEntry(){
 // «Отсечь»: сумма текущей группы становится новой отсечкой, группа обнуляется.
 function cutTape(){
   if(!tapeEntries.length){ $('#tapeInput').focus(); return; }
-  // Сохраняем и историю чисел, из которых сложилась отсечка.
-  tapeCuts.push({ name: '', items: tapeEntries.map(v=>parseNum(v)) });
+  // Сохраняем историю чисел и высоту элемента, из которых сложилась отсечка.
+  tapeCuts.push({ name: '', items: tapeEntries.map(v=>parseNum(v)), height: parseNum($('#tapeGroupH').value) });
   tapeEntries = [];
   saveTapeCuts(); saveTapeEntries();
   renderTape(); renderTapeCuts();
@@ -1568,13 +1581,8 @@ function clearTape(){
 
 function saveTapeSheet(){ try{ localStorage.setItem(TAPE_SHEET_KEY, $('#tapeSheet').value); }catch(e){} }
 function setTapeSheet(v){ $('#tapeSheet').value = v; saveTapeSheet(); updateTapeTotals(); renderTapeCuts(); }
-// Высота: если фактическая больше стандарта — поле факта подсвечивается фиолетовым.
-function saveTapeHeight(){ try{ localStorage.setItem(TAPE_HSTD_KEY, $('#tapeHeightStd').value); localStorage.setItem(TAPE_HFACT_KEY, $('#tapeHeightFact').value); }catch(e){} }
-function updateTapeHeight(){
-  const std = parseNum($('#tapeHeightStd').value);
-  const fact = parseNum($('#tapeHeightFact').value);
-  $('#tapeHeightFact').classList.toggle('over-height', std > 0 && fact > std);
-}
+function saveSheetH(){ try{ localStorage.setItem(TAPE_HSTD_KEY, $('#tapeHeightStd').value); }catch(e){} }
+function saveGroupH(){ try{ localStorage.setItem(TAPE_GROUPH_KEY, $('#tapeGroupH').value); }catch(e){} }
 
 on($('#tapeAdd'),'click', e=>{ e.preventDefault(); addTapeEntry(); });
 on($('#tapeCut'),'click', e=>{ e.preventDefault(); cutTape(); });
@@ -1583,13 +1591,13 @@ on($('#tapeInput'),'keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addT
 on($('#tapeSheet'),'input', e=>{ saveTapeSheet(); updateTapeTotals(); renderTapeCuts(); });
 on($('#tapeSheet1220'),'click', e=>{ e.preventDefault(); setTapeSheet('1220'); });
 on($('#tapeSheet1500'),'click', e=>{ e.preventDefault(); setTapeSheet('1500'); });
-on($('#tapeHeightStd'),'input', e=>{ saveTapeHeight(); updateTapeHeight(); });
-on($('#tapeHeightFact'),'input', e=>{ saveTapeHeight(); updateTapeHeight(); });
+// смена высоты листа: пересчитать фиолетовую подсветку у группы и всех отсечек
+on($('#tapeHeightStd'),'input', e=>{ saveSheetH(); updateTapeTotals(); renderTapeCuts(); });
+on($('#tapeGroupH'),'input', e=>{ saveGroupH(); updateTapeTotals(); });
 
 try{ const sv = localStorage.getItem(TAPE_SHEET_KEY); if(sv != null) $('#tapeSheet').value = sv; }catch(e){}
 try{ const hs = localStorage.getItem(TAPE_HSTD_KEY); if(hs != null) $('#tapeHeightStd').value = hs; }catch(e){}
-try{ const hf = localStorage.getItem(TAPE_HFACT_KEY); if(hf != null) $('#tapeHeightFact').value = hf; }catch(e){}
-updateTapeHeight();
+try{ const gh = localStorage.getItem(TAPE_GROUPH_KEY); if(gh != null) $('#tapeGroupH').value = gh; }catch(e){}
 tapeEntries = loadTapeArray(TAPE_KEY);
 tapeCuts = loadTapeArray(TAPE_CUTS_KEY).map(normalizeCut);   // поддержка старого формата
 renderTape();
