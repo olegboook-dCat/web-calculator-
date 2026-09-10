@@ -55,6 +55,7 @@
     .cut-h-wrap{display:flex;align-items:center;gap:4px}
     .cut-h-wrap input{width:72px}
     .cut-h-wrap .muted{white-space:nowrap}
+    .cut-area{white-space:nowrap;color:#cbd5e1;font-size:15px}
     .knauf-only{display:none}
     body.knauf-mode .knauf-only{display:block}
     body.knauf-mode .grid-2.knauf-only,body.knauf-mode .grid-3.knauf-only{display:grid}
@@ -1523,9 +1524,9 @@ function renderTapeCuts(){
     hWrap.innerHTML = `<span class="muted small">выс.</span><input type="text" inputmode="decimal" placeholder="мм" value="${cut.height ? cut.height : ''}">`;
     const hInp = hWrap.querySelector('input');
     hInp.classList.toggle('over-height', overHeight(parseNum(cut.height)));
-    // площадь этой отсечки (м²)
-    const areaEl = document.createElement('span'); areaEl.className = 'muted small cut-area';
-    const setArea = ()=>{ areaEl.textContent = 'S = ' + formatArea(cutArea(cut)) + ' м²'; };
+    // площадь этой отсечки (м²) — сразу после номера: «№1 = X м²»
+    const areaEl = document.createElement('span'); areaEl.className = 'cut-area';
+    const setArea = ()=>{ areaEl.textContent = '= ' + formatArea(cutArea(cut)) + ' м²'; };
     setArea();
     on(hInp,'input', e=>{ cut.height = parseNum(e.target.value); hInp.classList.toggle('over-height', overHeight(cut.height)); setArea(); updateTapeTotals(); saveTapeCuts(); });
     const toggle = document.createElement('button');
@@ -1546,7 +1547,7 @@ function renderTapeCuts(){
       inp.addEventListener('blur', commit);
     });
 
-    head.appendChild(noBtn); head.appendChild(nameView); head.appendChild(sumEl); head.appendChild(hWrap); head.appendChild(areaEl); head.appendChild(toggle); head.appendChild(del);
+    head.appendChild(noBtn); head.appendChild(areaEl); head.appendChild(nameView); head.appendChild(sumEl); head.appendChild(hWrap); head.appendChild(toggle); head.appendChild(del);
     block.appendChild(head);
 
     // --- история чисел (свёрнута по умолчанию), каждое со своим номером ---
