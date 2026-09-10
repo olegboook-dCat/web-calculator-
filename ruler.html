@@ -22,28 +22,30 @@
             <div class="muted" style="margin-top:6px">Отдельный инструмент для замеров — не связан с расчётом фасада выше. Вводите число и нажимайте «+ Добавить» (или Enter) — оно попадёт в текущую группу, её сумма считается сама. Кнопка «✂ Отсечь» закрывает группу: её сумма и высота записываются отдельной строкой с порядковым номером (Отсечка №1, №2 …), а ввод обнуляется для следующей. Все отсечки складываются в общий итог (плюс текущая группа). Числа и отсечки можно править и удалять. Лист задаётся габаритами «Ширина × Высота» (напр. 1220 × 4000). Ширина элемента (сумма кусков): когда достигает 95% ширины листа — поле красное. Высота элемента: если больше высоты листа — поле фиолетовое. И у текущей группы, и у каждой отсечки высота своя. Площадь каждой отсечки = ширина × высота, переведённая в м² (показана как «S = … м²»); их сумма плюс текущая группа — в строке «Итого площадь». У «Общего итога» есть переключатель единиц мм → см → м.</div>
           </details>
           <div class="actions" style="margin-top:8px;align-items:center">
-            <span class="muted small">Лист — ширина (мм):</span>
-            <input type="text" id="tapeSheet" inputmode="decimal" value="1220" style="max-width:100px">
-            <button class="btn ghost small" id="tapeSheet1220" style="padding:4px 10px">1220</button>
-            <button class="btn ghost small" id="tapeSheet1500" style="padding:4px 10px">1500</button>
+            <span class="muted small">Лист — ширина:</span>
+            <input type="text" id="tapeSheet" inputmode="decimal" value="1220" style="max-width:90px">
+            <select id="tapeSheetUnit" style="max-width:64px;padding:6px"><option value="mm">мм</option><option value="cm">см</option><option value="m">м</option></select>
+            <span style="display:inline-flex;flex-direction:column;gap:4px">
+              <button class="btn ghost small" id="tapeSheet1220" style="padding:2px 10px">1220</button>
+              <button class="btn ghost small" id="tapeSheet1500" style="padding:2px 10px">1500</button>
+            </span>
+          </div>
+          <div class="actions" style="margin-top:8px;align-items:center">
+            <span class="muted small">Лист — высота:</span>
+            <input type="text" id="tapeHeightStd" inputmode="decimal" value="4000" style="max-width:90px">
+            <select id="tapeSheetHUnit" style="max-width:64px;padding:6px"><option value="mm">мм</option><option value="cm">см</option><option value="m">м</option></select>
           </div>
           <div class="hr" style="margin:8px 0"></div>
           <div class="actions" style="margin-top:8px;align-items:center">
-            <span class="muted small">Лист — высота (мм):</span>
-            <input type="text" id="tapeHeightStd" inputmode="decimal" value="4000" style="max-width:100px">
-          </div>
-          <div class="actions" style="margin-top:8px">
             <input type="text" id="tapeInput" inputmode="decimal" placeholder="Введите число" style="max-width:200px">
-          </div>
-          <div class="actions" style="margin-top:8px">
-            <button class="btn primary" id="tapeAdd" style="width:200px;max-width:100%;font-size:18px">+</button>
+            <button class="btn primary" id="tapeAdd" style="min-width:48px;font-size:18px;margin-left:auto">+</button>
           </div>
           <div class="actions" style="margin-top:8px;align-items:center">
             <span class="muted small">Высота элемента (мм):</span>
             <input type="text" id="tapeGroupH" inputmode="decimal" placeholder="мм" style="max-width:110px">
           </div>
           <div class="actions" style="margin-top:8px">
-            <button class="btn" id="tapeCut" style="flex:1;background:#6e2230;border-color:#7f1d1d;color:#fecaca">✂ Отсечь</button>
+            <button class="btn" id="tapeCut" style="flex:1;justify-content:center;background:#6e2230;border-color:#7f1d1d;color:#fecaca">✂ Отсечь</button>
           </div>
           <div style="margin-top:10px">
             <span class="pill" id="tapeGroupPill">Текущая группа (ширина): <b id="tapeGroupSum">0</b></span>
@@ -97,6 +99,9 @@ const TAPE_SHEET_KEY = 'facadeTapeSheetLen';
 const TAPE_HSTD_KEY = 'facadeTapeHeightStd';       // высота листа (габарит)
 const TAPE_GROUPH_KEY = 'facadeTapeGroupHeight';   // высота текущего элемента
 const TAPE_UNIT_KEY = 'facadeTapeGrandUnit';       // единицы «Общего итога»: mm | m
+const TAPE_SHEET_UNIT_KEY = 'facadeTapeSheetUnit'; // единицы ширины листа
+const TAPE_SHEETH_UNIT_KEY = 'facadeTapeSheetHUnit'; // единицы высоты листа
+function unitFactor(u){ return u === 'm' ? 1000 : (u === 'cm' ? 10 : 1); }  // → в мм
 const TAPE_NEAR_RATIO = 0.95;   // доля ширины листа, с которой поле краснеет
 let tapeUnit = 'mm';
 let tapeEntries = [];
@@ -119,8 +124,9 @@ function tapeGroupSum(){ return tapeEntries.reduce((s,v)=> s + parseNum(v), 0); 
 function cutSum(cut){ return (cut && Array.isArray(cut.items) ? cut.items : []).reduce((s,v)=> s + parseNum(v), 0); }
 // Габариты листа. Ширина: сумма кусков ≥95% ширины листа → красный.
 // Высота: высота элемента > высоты листа → фиолетовый.
-function tapeSheetLen(){ return Math.max(0, parseNum($('#tapeSheet').value)); }
-function tapeSheetH(){ return Math.max(0, parseNum($('#tapeHeightStd').value)); }
+// Габариты листа приводим к мм по выбранной единице (пруски/высота элемента — в мм).
+function tapeSheetLen(){ return Math.max(0, parseNum($('#tapeSheet').value) * unitFactor($('#tapeSheetUnit').value)); }
+function tapeSheetH(){ return Math.max(0, parseNum($('#tapeHeightStd').value) * unitFactor($('#tapeSheetHUnit').value)); }
 function nearLimit(sum){ const s = tapeSheetLen(); return s > 0 && sum >= s * TAPE_NEAR_RATIO; }
 function overHeight(h){ const H = tapeSheetH(); return H > 0 && h > H; }
 // Площадь: (ширина, мм) × (высота, мм) → м² (÷ 1 000 000).
@@ -266,9 +272,26 @@ function clearTape(){
 }
 
 function saveTapeSheet(){ try{ localStorage.setItem(TAPE_SHEET_KEY, $('#tapeSheet').value); }catch(e){} }
-function setTapeSheet(v){ $('#tapeSheet').value = v; saveTapeSheet(); updateTapeTotals(); renderTapeCuts(); }
 function saveSheetH(){ try{ localStorage.setItem(TAPE_HSTD_KEY, $('#tapeHeightStd').value); }catch(e){} }
 function saveGroupH(){ try{ localStorage.setItem(TAPE_GROUPH_KEY, $('#tapeGroupH').value); }catch(e){} }
+function saveSheetUnit(){ try{ localStorage.setItem(TAPE_SHEET_UNIT_KEY, $('#tapeSheetUnit').value); }catch(e){} }
+function saveSheetHUnit(){ try{ localStorage.setItem(TAPE_SHEETH_UNIT_KEY, $('#tapeSheetHUnit').value); }catch(e){} }
+// Кнопки 1220/1500 задают ширину в мм.
+function setTapeSheet(v){ $('#tapeSheet').value = v; $('#tapeSheetUnit').value = 'mm'; sheetUnitPrev = 'mm'; saveTapeSheet(); saveSheetUnit(); updateTapeTotals(); renderTapeCuts(); }
+// При смене единицы пересчитываем показанное значение, сохраняя физический размер.
+let sheetUnitPrev = 'mm', sheetHUnitPrev = 'mm';
+function changeSheetUnit(){
+  const nu = $('#tapeSheetUnit').value;
+  const mm = parseNum($('#tapeSheet').value) * unitFactor(sheetUnitPrev);
+  $('#tapeSheet').value = formatTapeNumber(mm / unitFactor(nu));
+  sheetUnitPrev = nu; saveTapeSheet(); saveSheetUnit(); updateTapeTotals(); renderTapeCuts();
+}
+function changeSheetHUnit(){
+  const nu = $('#tapeSheetHUnit').value;
+  const mm = parseNum($('#tapeHeightStd').value) * unitFactor(sheetHUnitPrev);
+  $('#tapeHeightStd').value = formatTapeNumber(mm / unitFactor(nu));
+  sheetHUnitPrev = nu; saveSheetH(); saveSheetHUnit(); updateTapeTotals(); renderTapeCuts();
+}
 
 on($('#tapeAdd'),'click', e=>{ e.preventDefault(); addTapeEntry(); });
 on($('#tapeCut'),'click', e=>{ e.preventDefault(); cutTape(); });
@@ -277,6 +300,8 @@ on($('#tapeInput'),'keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addT
 on($('#tapeSheet'),'input', e=>{ saveTapeSheet(); updateTapeTotals(); renderTapeCuts(); });
 on($('#tapeSheet1220'),'click', e=>{ e.preventDefault(); setTapeSheet('1220'); });
 on($('#tapeSheet1500'),'click', e=>{ e.preventDefault(); setTapeSheet('1500'); });
+on($('#tapeSheetUnit'),'change', e=>{ changeSheetUnit(); });
+on($('#tapeSheetHUnit'),'change', e=>{ changeSheetHUnit(); });
 // смена высоты листа: пересчитать фиолетовую подсветку у группы и всех отсечек
 on($('#tapeHeightStd'),'input', e=>{ saveSheetH(); updateTapeTotals(); renderTapeCuts(); });
 on($('#tapeGroupH'),'input', e=>{ saveGroupH(); updateTapeTotals(); });
@@ -286,6 +311,8 @@ try{ const sv = localStorage.getItem(TAPE_SHEET_KEY); if(sv != null) $('#tapeShe
 try{ const hs = localStorage.getItem(TAPE_HSTD_KEY); if(hs != null) $('#tapeHeightStd').value = hs; }catch(e){}
 try{ const gh = localStorage.getItem(TAPE_GROUPH_KEY); if(gh != null) $('#tapeGroupH').value = gh; }catch(e){}
 try{ const u = localStorage.getItem(TAPE_UNIT_KEY); if(u === 'm' || u === 'cm' || u === 'mm') tapeUnit = u; }catch(e){}
+try{ const su = localStorage.getItem(TAPE_SHEET_UNIT_KEY); if(su==='m'||su==='cm'||su==='mm'){ $('#tapeSheetUnit').value = su; sheetUnitPrev = su; } }catch(e){}
+try{ const shu = localStorage.getItem(TAPE_SHEETH_UNIT_KEY); if(shu==='m'||shu==='cm'||shu==='mm'){ $('#tapeSheetHUnit').value = shu; sheetHUnitPrev = shu; } }catch(e){}
 tapeEntries = loadTapeArray(TAPE_KEY);
 tapeCuts = loadTapeArray(TAPE_CUTS_KEY).map(normalizeCut);   // поддержка старого формата
 renderTape();
