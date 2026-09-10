@@ -51,6 +51,7 @@
     .pill.near-limit{border-color:#7f1d1d;background:#2a0f14}
     .pill.near-limit b{color:#f87171}
     .cut-sum.near-limit{color:#f87171}
+    input.over-height{outline:2px solid #a855f7;background:#1e1233;color:#e9d5ff}
     .knauf-only{display:none}
     body.knauf-mode .knauf-only{display:block}
     body.knauf-mode .grid-2.knauf-only,body.knauf-mode .grid-3.knauf-only{display:grid}
@@ -301,13 +302,19 @@
         <div style="margin-top:12px">
           <details class="hint" style="margin-top:0">
             <summary class="muted small" style="cursor:pointer">ⓘ Подсказка</summary>
-            <div class="muted" style="margin-top:6px">Отдельный инструмент для замеров — не связан с расчётом фасада выше. Вводите число и нажимайте «+ Добавить» (или Enter) — оно попадёт в текущую группу, её сумма считается сама. Кнопка «✂ Отсечь» закрывает группу: её сумма записывается отдельной строкой с порядковым номером (Отсечка №1, №2 …), а ввод обнуляется для следующей. Все отсечки складываются в общий итог (плюс текущая группа). Числа и отсечки можно править и удалять. «Исходный лист» — длина заготовки; когда сумма (текущей группы или отсечки) достигает 95% длины листа, поле подсвечивается красным.</div>
+            <div class="muted" style="margin-top:6px">Отдельный инструмент для замеров — не связан с расчётом фасада выше. Вводите число и нажимайте «+ Добавить» (или Enter) — оно попадёт в текущую группу, её сумма считается сама. Кнопка «✂ Отсечь» закрывает группу: её сумма записывается отдельной строкой с порядковым номером (Отсечка №1, №2 …), а ввод обнуляется для следующей. Все отсечки складываются в общий итог (плюс текущая группа). Числа и отсечки можно править и удалять. «Исходный лист» — длина заготовки; когда сумма (текущей группы или отсечки) достигает 95% длины листа, поле подсвечивается красным. «Высота факт» сравнивается со «Стандартом высоты» (по умолчанию 4000 мм): если факт больше стандарта — поле подсвечивается фиолетовым.</div>
           </details>
           <div class="actions" style="margin-top:8px;align-items:center">
             <span class="muted small">Исходный лист:</span>
             <input type="text" id="tapeSheet" inputmode="decimal" value="1220" style="max-width:110px">
             <button class="btn ghost small" id="tapeSheet1220" style="padding:4px 10px">1220</button>
             <button class="btn ghost small" id="tapeSheet1500" style="padding:4px 10px">1500</button>
+          </div>
+          <div class="actions" style="margin-top:8px;align-items:center">
+            <span class="muted small">Стандарт высоты (мм):</span>
+            <input type="text" id="tapeHeightStd" inputmode="decimal" value="4000" style="max-width:110px">
+            <span class="muted small">Высота факт (мм):</span>
+            <input type="text" id="tapeHeightFact" inputmode="decimal" placeholder="мм" style="max-width:110px">
           </div>
           <div class="actions" style="margin-top:8px">
             <input type="text" id="tapeInput" inputmode="decimal" placeholder="Введите число" style="max-width:200px">
@@ -1424,6 +1431,8 @@ updateUndoRedoButtons();
 const TAPE_KEY = 'facadeTapeCalculatorEntries';
 const TAPE_CUTS_KEY = 'facadeTapeCalculatorCuts';
 const TAPE_SHEET_KEY = 'facadeTapeSheetLen';
+const TAPE_HSTD_KEY = 'facadeTapeHeightStd';
+const TAPE_HFACT_KEY = 'facadeTapeHeightFact';
 const TAPE_NEAR_RATIO = 0.95;   // доля длины листа, с которой поле краснеет
 let tapeEntries = [];
 let tapeCuts = [];
@@ -1559,6 +1568,13 @@ function clearTape(){
 
 function saveTapeSheet(){ try{ localStorage.setItem(TAPE_SHEET_KEY, $('#tapeSheet').value); }catch(e){} }
 function setTapeSheet(v){ $('#tapeSheet').value = v; saveTapeSheet(); updateTapeTotals(); renderTapeCuts(); }
+// Высота: если фактическая больше стандарта — поле факта подсвечивается фиолетовым.
+function saveTapeHeight(){ try{ localStorage.setItem(TAPE_HSTD_KEY, $('#tapeHeightStd').value); localStorage.setItem(TAPE_HFACT_KEY, $('#tapeHeightFact').value); }catch(e){} }
+function updateTapeHeight(){
+  const std = parseNum($('#tapeHeightStd').value);
+  const fact = parseNum($('#tapeHeightFact').value);
+  $('#tapeHeightFact').classList.toggle('over-height', std > 0 && fact > std);
+}
 
 on($('#tapeAdd'),'click', e=>{ e.preventDefault(); addTapeEntry(); });
 on($('#tapeCut'),'click', e=>{ e.preventDefault(); cutTape(); });
@@ -1567,8 +1583,13 @@ on($('#tapeInput'),'keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addT
 on($('#tapeSheet'),'input', e=>{ saveTapeSheet(); updateTapeTotals(); renderTapeCuts(); });
 on($('#tapeSheet1220'),'click', e=>{ e.preventDefault(); setTapeSheet('1220'); });
 on($('#tapeSheet1500'),'click', e=>{ e.preventDefault(); setTapeSheet('1500'); });
+on($('#tapeHeightStd'),'input', e=>{ saveTapeHeight(); updateTapeHeight(); });
+on($('#tapeHeightFact'),'input', e=>{ saveTapeHeight(); updateTapeHeight(); });
 
 try{ const sv = localStorage.getItem(TAPE_SHEET_KEY); if(sv != null) $('#tapeSheet').value = sv; }catch(e){}
+try{ const hs = localStorage.getItem(TAPE_HSTD_KEY); if(hs != null) $('#tapeHeightStd').value = hs; }catch(e){}
+try{ const hf = localStorage.getItem(TAPE_HFACT_KEY); if(hf != null) $('#tapeHeightFact').value = hf; }catch(e){}
+updateTapeHeight();
 tapeEntries = loadTapeArray(TAPE_KEY);
 tapeCuts = loadTapeArray(TAPE_CUTS_KEY).map(normalizeCut);   // поддержка старого формата
 renderTape();
