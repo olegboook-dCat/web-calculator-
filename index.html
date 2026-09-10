@@ -40,8 +40,11 @@
     .cut-block{border:1px solid #1f2937;border-radius:10px;padding:8px 10px;margin:6px 0;background:#0b1221}
     .cut-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
     .cut-no{padding:3px 10px;border-radius:999px;border:1px solid #334155;background:#0b1221;color:#e5e7eb;font-size:13px;white-space:nowrap;cursor:pointer}
-    .cut-no:hover{border-color:var(--pri)}
-    .cut-name-view{flex:1;min-width:0;color:#cbd5e1}
+    .cut-no::after{content:' ✎';opacity:.6}
+    .cut-no:hover{border-color:var(--pri);color:#fff}
+    .cut-name-view{min-width:0;color:#cbd5e1;cursor:pointer;border-bottom:1px dashed #475569}
+    .cut-name-view:hover{color:#fff;border-bottom-color:var(--pri)}
+    .cut-name-view:empty::before{content:'✎ название';color:var(--muted)}
     .cut-name-edit{flex:1;min-width:120px;width:auto}
     .cut-sum{color:#86efac;white-space:nowrap;font-size:16px}
     .cut-items{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;align-items:center}
@@ -1537,8 +1540,8 @@ function renderTapeCuts(){
     const del = document.createElement('button'); del.type = 'button'; del.className = 'btn ghost'; del.textContent = '✕';
     del.addEventListener('click', e=>{ e.preventDefault(); tapeCuts.splice(ci, 1); saveTapeCuts(); renderTapeCuts(); });
 
-    // клик по номеру → инлайн-поле ввода названия
-    noBtn.addEventListener('click', e=>{ e.preventDefault();
+    // клик по номеру или названию → инлайн-поле ввода названия
+    const startNameEdit = ()=>{
       const inp = document.createElement('input');
       inp.type = 'text'; inp.className = 'cut-name-edit'; inp.placeholder = 'Название'; inp.value = cut.name || '';
       nameView.replaceWith(inp); inp.focus(); inp.select();
@@ -1546,9 +1549,14 @@ function renderTapeCuts(){
       const commit = ()=>{ if(done) return; done = true; cut.name = inp.value.trim(); saveTapeCuts(); renderTapeCuts(); };
       inp.addEventListener('keydown', ev=>{ if(ev.key === 'Enter'){ ev.preventDefault(); commit(); } else if(ev.key === 'Escape'){ done = true; renderTapeCuts(); } });
       inp.addEventListener('blur', commit);
-    });
+    };
+    noBtn.title = 'Нажмите, чтобы задать/изменить название';
+    nameView.title = 'Нажмите, чтобы изменить название';
+    noBtn.addEventListener('click', e=>{ e.preventDefault(); startNameEdit(); });
+    nameView.addEventListener('click', e=>{ e.preventDefault(); startNameEdit(); });
 
-    head.appendChild(noBtn); head.appendChild(areaEl); head.appendChild(nameView); head.appendChild(sumEl); head.appendChild(hWrap); head.appendChild(toggle); head.appendChild(del);
+    const spacer = document.createElement('span'); spacer.style.flex = '1';
+    head.appendChild(noBtn); head.appendChild(areaEl); head.appendChild(nameView); head.appendChild(spacer); head.appendChild(sumEl); head.appendChild(hWrap); head.appendChild(toggle); head.appendChild(del);
     block.appendChild(head);
 
     // --- история чисел (свёрнута по умолчанию), каждое со своим номером ---
