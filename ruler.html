@@ -76,10 +76,17 @@
     </div>
 
     <div class="card">
-      <h2 style="margin:0 0 6px;font-size:18px">Раскрой на листе</h2>
+      <h2 style="margin:0 0 6px;font-size:18px">Развёртки отсечек</h2>
       <div class="muted small" id="tapeLayoutInfo" style="margin-bottom:8px">—</div>
       <div id="tapeLayoutOver" class="warn-msg" style="display:none"></div>
       <div id="tapeLayout" class="table-scroll" style="display:flex;gap:14px;align-items:flex-start;padding-bottom:6px"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 6px;font-size:18px">Раскрой на листе (для фрезера)</h2>
+      <div class="muted small" id="cutPlanInfo" style="margin-bottom:8px">—</div>
+      <div id="cutPlanOver" class="warn-msg" style="display:none"></div>
+      <div id="cutPlan" class="table-scroll" style="display:flex;gap:14px;align-items:flex-start;padding-bottom:6px"></div>
     </div>
   </div>
 <script>
@@ -172,6 +179,7 @@ function updateTapeTotals(){
   $('#tapeGroupH').classList.toggle('over-height', overHeight(groupHeightMm()));
   saveTapeSummary(grand, tapeCutsArea() + tapeGroupArea());   // для страницы «Калькулятор»
   renderLayout();
+  renderCutPlan();
 }
 // Итог линейки для показа на странице 2 (общий итог, единица, площадь).
 function saveTapeSummary(grandMm, areaM2){
@@ -271,13 +279,14 @@ function renderLayout(){
     wrap.title = 'Нажмите, чтобы увеличить';
     wrap.innerHTML = buildStripSvg(ot, scale, dim, 12)
       + `<div class="muted small" style="margin-top:2px">${escapeHtml(title)}</div>`;
-    wrap.addEventListener('click', ()=> openLayoutZoom(ot, dim, title));
+    wrap.addEventListener('click', ()=> openZoom(title, ot.items.reduce((s,w)=>s+w,0), ot.h, s=> buildStripSvg(ot, s, dim, 40)));
     host.appendChild(wrap);
   });
 }
-// Увеличение отсечки: оверлей с крупной прокручиваемой развёрткой и кнопками «+/−».
+// Универсальное увеличение: оверлей с крупной прокручиваемой схемой и «+/−».
+// buildFn(scale) — функция, рисующая SVG; cw/ch — габариты содержимого (мм) для вписывания.
 let tapeZoomState = null;
-function openLayoutZoom(ot, dim, title){
+function openZoom(title, cw, ch, buildFn){
   let ov = document.getElementById('tapeZoomOverlay');
   if(!ov){
     ov = document.createElement('div'); ov.id = 'tapeZoomOverlay';
@@ -298,17 +307,114 @@ function openLayoutZoom(ot, dim, title){
     ov.querySelector('#tzIn').addEventListener('click', ()=>{ tapeZoomState.zoom = Math.min(20, tapeZoomState.zoom * 1.5); drawTapeZoom(); });
     ov.querySelector('#tzOut').addEventListener('click', ()=>{ tapeZoomState.zoom = Math.max(0.4, tapeZoomState.zoom / 1.5); drawTapeZoom(); });
   }
-  const totalW = ot.items.reduce((s, w)=> s + w, 0) || 1;
-  const fit = Math.min((window.innerWidth * 0.9) / totalW, (window.innerHeight * 0.7) / (ot.h || 1));
-  tapeZoomState = { ot, dim, base: fit, zoom: 1 };
+  const fit = Math.min((window.innerWidth * 0.9) / (cw || 1), (window.innerHeight * 0.7) / (ch || 1));
+  tapeZoomState = { buildFn, base: fit, zoom: 1 };
   ov.querySelector('#tzTitle').textContent = title;
   ov.style.display = 'flex';
   drawTapeZoom();
 }
 function drawTapeZoom(){
   const z = tapeZoomState; if(!z) return;
-  const s = z.base * z.zoom;
-  document.getElementById('tzBody').innerHTML = buildStripSvg(z.ot, s, z.dim, 40);
+  document.getElementById('tzBody').innerHTML = z.buildFn(z.base * z.zoom);
+}
+
+// --- Раскрой на листе для фрезера: укладываем отсечки на исходные листы ------
+// Панель отсечки = «сумма длин сегментов (ширина) × высота». На листе: ширина
+// вдоль ширины листа, высота вдоль длины листа. Стандартные листы 1220×4000 и
+// 1500×4000: если панель шире 1220 — кладём на 1500 и подсвечиваем красным;
+// шире 1500 или выше длины листа — не помещается (тоже красным).
+const SHEET_W1 = 1220, SHEET_W2 = 1500;
+const LAYOUT_RED_FILL = '#3a1f27', LAYOUT_RED_STROKE = '#f87171';
+function panelWidth(ot){ return ot.items.reduce((s, w)=> s + w, 0); }
+function packInto(items, Wsheet, L, red){
+  const sheets = [], EPS = 1e-6;
+  let sheet = null, shelf = null;
+  const newSheet = ()=>{ sheet = { Wsheet, L, red, shelves: [], usedLen: 0 }; sheets.push(sheet); shelf = null; };
+  items.forEach(ot=>{
+    const pw = panelWidth(ot), ph = ot.h;
+    if(!sheet) newSheet();
+    if(!shelf || shelf.usedW + pw > Wsheet + EPS){
+      if(sheet.usedLen + ph > L + EPS) newSheet();
+      shelf = { y: sheet.usedLen, h: 0, usedW: 0, items: [] };
+      sheet.shelves.push(shelf);
+    }
+    shelf.items.push({ x: shelf.usedW, y: shelf.y, pw, ph, ot });
+    shelf.usedW += pw;
+    const nh = Math.max(shelf.h, ph); sheet.usedLen += (nh - shelf.h); shelf.h = nh;
+  });
+  return sheets;
+}
+function buildCutPlan(list, L){
+  const fit1220 = [], fit1500 = [], oversize = [];
+  list.forEach(ot=>{
+    const pw = panelWidth(ot);
+    if(ot.h > L || pw > SHEET_W2) oversize.push(ot);
+    else if(pw > SHEET_W1) fit1500.push(ot);
+    else fit1220.push(ot);
+  });
+  const sheets = packInto(fit1220, SHEET_W1, L, false).concat(packInto(fit1500, SHEET_W2, L, true));
+  return { sheets, oversize };
+}
+// Рисуем один лист раскроя: контур листа + панели (голубой контур реза, серые
+// линии сгиба, номер по центру). Панели на листе 1500 — красная подсветка.
+function buildNestSheetSvg(sheet, scale, dim, maxFs){
+  const pxW = Math.max(1, sheet.Wsheet * scale), pxL = Math.max(1, sheet.L * scale);
+  let fills = '', folds = '', cuts = '', nums = '';
+  sheet.shelves.forEach(shelf=>{
+    shelf.items.forEach(it=>{
+      const px = it.x * scale, py = it.y * scale, pw = Math.max(2, it.pw * scale), ph = Math.max(2, it.ph * scale);
+      const fill = sheet.red ? LAYOUT_RED_FILL : LAYOUT_EL_FILL;
+      const cutStroke = sheet.red ? LAYOUT_RED_STROKE : LAYOUT_CUT_COLOR;
+      // сегменты панели (заливка + линии сгиба между ними)
+      let cxmm = 0;
+      it.ot.items.forEach((w)=>{
+        const sx = px + cxmm * scale, sw = Math.max(1, w * scale);
+        fills += `<rect x="${sx.toFixed(2)}" y="${py.toFixed(2)}" width="${sw.toFixed(2)}" height="${ph.toFixed(2)}" fill="${fill}" stroke="${LAYOUT_EL_STROKE}" stroke-width="0.6"></rect>`;
+        cxmm += w;
+      });
+      // контур реза панели (голубой / красный если 1500)
+      cuts += `<rect x="${px.toFixed(2)}" y="${py.toFixed(2)}" width="${pw.toFixed(2)}" height="${ph.toFixed(2)}" fill="none" stroke="${cutStroke}" stroke-width="2"></rect>`;
+      // номер отсечки по центру панели
+      if(it.ot.no){
+        const nfs = Math.min(maxFs, Math.max(9, Math.min(pw, ph) / 3));
+        nums += `<text x="${(px + pw / 2).toFixed(2)}" y="${(py + ph / 2 + nfs * 0.35).toFixed(2)}" text-anchor="middle" font-size="${nfs.toFixed(2)}" font-weight="700" fill="#e2e8f0" style="paint-order:stroke" stroke="#0b1221" stroke-width="${(nfs * 0.16).toFixed(2)}">№${it.ot.no}</text>`;
+      }
+    });
+  });
+  const sheetStroke = sheet.red ? LAYOUT_RED_STROKE : '#475569';
+  return `<svg width="${pxW.toFixed(1)}" height="${pxL.toFixed(1)}" style="border-radius:4px">`
+    + `<rect x="0" y="0" width="${pxW.toFixed(1)}" height="${pxL.toFixed(1)}" fill="#0b1221" stroke="${sheetStroke}" stroke-width="1.5"></rect>`
+    + fills + folds + cuts + nums + `</svg>`;
+}
+function renderCutPlan(){
+  const host = $('#cutPlan'); if(!host) return;
+  const info = $('#cutPlanInfo'), over = $('#cutPlanOver');
+  const list = collectOtsechki().filter(ot=> ot.no);   // только отсечённые (без текущей группы)
+  const L = tapeSheetH() || 4000;
+  const uf = unitFactor(sheetUnit), uLbl = unitLabel(sheetUnit);
+  const dim = mm => formatTapeNumber(mm / uf);
+  host.innerHTML = '';
+  over.style.display = 'none'; over.innerHTML = '';
+  if(!list.length){ info.textContent = 'Сделайте отсечки («✂ Отсечь»), чтобы разложить их на листах.'; return; }
+
+  const { sheets, oversize } = buildCutPlan(list, L);
+  const n1220 = sheets.filter(s=>!s.red).length, n1500 = sheets.filter(s=>s.red).length;
+  info.textContent = `Листов: ${sheets.length} (1220×${dim(L)}: ${n1220}` + (n1500 ? `, 1500×${dim(L)}: ${n1500}` : '') + `) · нажмите на лист, чтобы увеличить`;
+  if(oversize.length){
+    over.style.display = 'block';
+    over.innerHTML = `<div>⚠ Не помещается ни на 1220, ни на 1500: ${oversize.length} шт. (шире ${dim(SHEET_W2)} или выше ${dim(L)}).</div>`;
+  }
+  const scale = Math.min(150 / SHEET_W2, 430 / L);   // общий масштаб миниатюр
+  sheets.forEach((sheet, si)=>{
+    const title = `Лист ${sheet.Wsheet}×${dim(L)}` + (sheet.red ? ' (не влез на 1220)' : '');
+    const wrap = document.createElement('div');
+    wrap.style.flex = '0 0 auto'; wrap.style.textAlign = 'center'; wrap.style.cursor = 'zoom-in';
+    wrap.title = 'Нажмите, чтобы увеличить';
+    wrap.innerHTML = buildNestSheetSvg(sheet, scale, dim, 11)
+      + `<div class="muted small" style="margin-top:2px${sheet.red ? ';color:#f87171' : ''}">${title}</div>`;
+    wrap.addEventListener('click', ()=> openZoom(title, sheet.Wsheet, L, s=> buildNestSheetSvg(sheet, s, dim, 40)));
+    host.appendChild(wrap);
+  });
 }
 
 function renderTape(){
