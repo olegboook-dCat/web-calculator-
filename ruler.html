@@ -79,7 +79,6 @@
       <h2 style="margin:0 0 6px;font-size:18px">Раскрой на листе</h2>
       <div class="muted small" id="tapeLayoutInfo" style="margin-bottom:8px">—</div>
       <div id="tapeLayoutOver" class="warn-msg" style="display:none"></div>
-      <div id="tapeLayoutLegend" style="margin-bottom:8px"></div>
       <div id="tapeLayout" class="table-scroll" style="display:flex;gap:14px;align-items:flex-start;padding-bottom:6px"></div>
     </div>
   </div>
@@ -183,37 +182,20 @@ function saveTapeSummary(grandMm, areaM2){
 // Собираем все элементы (текущая группа + отсечки), каждый — прямоугольник
 // ширина(мм) × высота(мм). Укладываем полочным методом: встык по ширине листа,
 // перенос на новую полку при нехватке ширины и на новый лист при нехватке высоты.
-// Полка держит одну высоту, поэтому элементы одной отсечки лежат вместе.
-// Цвет — по отсечке (перенос номера из линейки), плюс чередование оттенка
-// у соседних элементов, чтобы каждый элемент читался отдельно.
-const LAYOUT_COLORS = [
-  ['#0e7490','#22d3ee'], // бирюзовый
-  ['#4d7c0f','#a3e635'], // зелёный
-  ['#b45309','#fbbf24'], // янтарный
-  ['#7e22ce','#d8b4fe'], // фиолетовый
-  ['#be123c','#fb7185'], // розовый
-  ['#1d4ed8','#93c5fd'], // синий
-  ['#c2410c','#fdba74'], // оранжевый
-  ['#0f766e','#5eead4']  // изумрудный
-];
-const LAYOUT_GROUP_COLOR = ['#475569','#cbd5e1']; // текущая (не отсечённая) группа
-function layoutColor(cutIndex){ return cutIndex < 0 ? LAYOUT_GROUP_COLOR : LAYOUT_COLORS[cutIndex % LAYOUT_COLORS.length]; }
-function lightenHex(hex, amt){
-  const n = parseInt(hex.slice(1), 16);
-  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
-  r = Math.round(r + (255 - r) * amt); g = Math.round(g + (255 - g) * amt); b = Math.round(b + (255 - b) * amt);
-  return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
-}
+// Все элементы одного нейтрального цвета. Границы отсечки (место реза «✂ Отсечь»,
+// где лист отрезается) отмечаются яркой голубой линией; линии сгиба внутри
+// отсечки и все прочие — обычные, одинаковые.
+const LAYOUT_EL_FILL = '#334155';    // единый цвет элемента
+const LAYOUT_EL_STROKE = '#64748b';  // обычная линия (сгиб и прочие)
+const LAYOUT_CUT_COLOR = '#38bdf8';  // яркая голубая линия реза (отрез)
 function collectLayoutElements(){
   const els = [];
-  tapeCuts.forEach((cut, ci)=>{
-    const h = parseNum(cut.height);
-    let e = 0;
-    (cut.items || []).forEach(v=>{ const w = parseNum(v); if(w > 0 && h > 0) els.push({ w, h, cutIndex: ci, no: '№' + (ci + 1), name: cut.name || '', eIdx: e++ }); });
-  });
-  const gh = groupHeightMm();
-  let e = 0;
-  tapeEntries.forEach(v=>{ const w = parseNum(v); if(w > 0 && gh > 0) els.push({ w, h: gh, cutIndex: -1, no: 'Гр', name: 'тек. группа', eIdx: e++ }); });
+  const pushCut = (items, h, cutIndex)=>{
+    const ws = (items || []).map(v=>parseNum(v)).filter(w=>w > 0);
+    ws.forEach((w, i)=> els.push({ w, h, cutIndex, isFirst: i === 0, isLast: i === ws.length - 1 }));
+  };
+  tapeCuts.forEach((cut, ci)=>{ const h = parseNum(cut.height); if(h > 0) pushCut(cut.items, h, ci); });
+  const gh = groupHeightMm(); if(gh > 0) pushCut(tapeEntries, gh, -1);
   return els;
 }
 function packLayout(els, W, H){
@@ -237,12 +219,11 @@ function packLayout(els, W, H){
 }
 function renderLayout(){
   const host = $('#tapeLayout'); if(!host) return;
-  const info = $('#tapeLayoutInfo'), over = $('#tapeLayoutOver'), legend = $('#tapeLayoutLegend');
+  const info = $('#tapeLayoutInfo'), over = $('#tapeLayoutOver');
   const W = tapeSheetLen(), H = tapeSheetH();
   const els = collectLayoutElements();
   host.innerHTML = '';
   over.style.display = 'none'; over.innerHTML = '';
-  if(legend) legend.innerHTML = '';
   if(W <= 0 || H <= 0){ info.textContent = 'Задайте ширину и высоту листа, чтобы увидеть раскрой.'; return; }
   if(!els.length){ info.textContent = 'Добавьте элементы (с высотой), чтобы увидеть раскрой.'; return; }
 
@@ -256,20 +237,6 @@ function renderLayout(){
     over.innerHTML = `<div>⚠ Не помещается на лист: ${oversize.length} шт. (элемент шире или выше листа).</div>`;
   }
 
-  // Легенда — номера и названия отсечек, как в линейке (+ текущая группа).
-  if(legend){
-    const seen = new Set(); let chips = '';
-    els.forEach(el=>{
-      if(seen.has(el.cutIndex)) return; seen.add(el.cutIndex);
-      const col = layoutColor(el.cutIndex);
-      const label = el.cutIndex < 0 ? 'Тек. группа' : (el.no + (el.name ? ' ' + el.name : ''));
-      chips += `<span style="display:inline-flex;align-items:center;gap:5px;margin:0 12px 6px 0">`
-             + `<span style="width:12px;height:12px;border-radius:3px;background:${col[0]};border:1px solid ${col[1]};display:inline-block"></span>`
-             + `<span class="muted small">${escapeHtml(label)}</span></span>`;
-    });
-    legend.innerHTML = chips;
-  }
-
   // Масштаб: лист вписываем в рамку не шире 150px и не выше 430px, сохраняя пропорции.
   const scale = Math.min(150 / W, 430 / H);
   const MAX_SHEETS = 12;
@@ -277,40 +244,34 @@ function renderLayout(){
     const pxW = Math.max(1, W * scale), pxH = Math.max(1, H * scale);
     const wrap = document.createElement('div');
     wrap.style.flex = '0 0 auto'; wrap.style.textAlign = 'center';
-    let rects = '';
+    let rects = '', cutLines = '';
     sh.shelves.forEach(shelf=>{
       shelf.items.forEach(it=>{
         const x = it.x * scale, y = shelf.y * scale, w = it.w * scale, h = it.h * scale;
-        const col = layoutColor(it.el.cutIndex);
-        // чередование оттенка у соседних элементов одной отсечки
-        const fill = (it.el.eIdx % 2 === 1) ? lightenHex(col[0], 0.22) : col[0];
-        // Очень тонкие элементы (напр. 2 мм) в масштабе — доли пикселя и не видны.
-        // В расчёте они учитываются полностью; здесь лишь даём минимальную ширину
-        // на рисунке, чтобы элемент было видно (не выходя за край листа).
-        const MIN_EL_PX = 2;
-        const wDraw = Math.max(w, MIN_EL_PX);
+        // Тонкие элементы получают минимальную ширину на рисунке (в расчёте — как есть).
+        const wDraw = Math.max(w, 2);
         const xDraw = Math.min(x, Math.max(0, pxW - wDraw));
-        const cx = (xDraw + wDraw / 2).toFixed(2);
-        rects += `<rect x="${xDraw.toFixed(2)}" y="${y.toFixed(2)}" width="${wDraw.toFixed(2)}" height="${h.toFixed(2)}" fill="${fill}" stroke="${col[1]}" stroke-width="1"></rect>`;
-        if(w >= 16 && h >= 24){
-          // номер отсечки + ширина (по горизонтали)
-          rects += `<text x="${cx}" y="${(y + h/2 - 2).toFixed(2)}" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">${it.el.no}</text>`;
-          rects += `<text x="${cx}" y="${(y + h/2 + 10).toFixed(2)}" text-anchor="middle" font-size="8" fill="#e5e7eb">${dim(it.w)}</text>`;
-        } else if(w >= 13 && h >= 11){
-          rects += `<text x="${cx}" y="${(y + h/2 + 3).toFixed(2)}" text-anchor="middle" font-size="8" font-weight="700" fill="#fff">${it.el.no}</text>`;
-        } else if(h >= 18){
-          // Узкий элемент: подпись не влезает по горизонтали — пишем вертикально
-          // (вдоль высоты), чтобы цифра была видна даже на тонком элементе.
-          const cyv = (y + h / 2).toFixed(2);
-          const txt = (h >= 42) ? (it.el.no + ' · ' + dim(it.w)) : dim(it.w);
-          rects += `<text x="${cx}" y="${cyv}" transform="rotate(-90 ${cx} ${cyv})" text-anchor="middle" font-size="8" font-weight="700" fill="#fff" style="paint-order:stroke" stroke="${col[0]}" stroke-width="0.6">${txt}</text>`;
+        rects += `<rect x="${xDraw.toFixed(2)}" y="${y.toFixed(2)}" width="${wDraw.toFixed(2)}" height="${h.toFixed(2)}" fill="${LAYOUT_EL_FILL}" stroke="${LAYOUT_EL_STROKE}" stroke-width="0.8"></rect>`;
+        // Подпись — только длина. Кегль подгоняем под ширину элемента: на широких
+        // видно сразу, на тонких мельчает и читается при увеличении (зум).
+        const label = dim(it.w);
+        const fs = Math.min(9, wDraw / (0.62 * label.length + 0.3), h / 2.2);
+        if(fs >= 1){
+          const cx = (xDraw + wDraw / 2).toFixed(2);
+          const cy = (y + h / 2 + fs * 0.35).toFixed(2);
+          rects += `<text x="${cx}" y="${cy}" text-anchor="middle" font-size="${fs.toFixed(2)}" fill="#e5e7eb">${label}</text>`;
         }
+        // Голубая линия реза по краям отсечки (место «✂ Отсечь»).
+        const yTop = y.toFixed(2), yBot = (y + h).toFixed(2);
+        if(it.el.isFirst){ const lx = xDraw.toFixed(2); cutLines += `<line x1="${lx}" y1="${yTop}" x2="${lx}" y2="${yBot}" stroke="${LAYOUT_CUT_COLOR}" stroke-width="2"></line>`; }
+        if(it.el.isLast){ const rx = (xDraw + wDraw).toFixed(2); cutLines += `<line x1="${rx}" y1="${yTop}" x2="${rx}" y2="${yBot}" stroke="${LAYOUT_CUT_COLOR}" stroke-width="2"></line>`; }
       });
     });
     wrap.innerHTML =
       `<svg width="${pxW.toFixed(1)}" height="${pxH.toFixed(1)}" style="border-radius:4px">
         <rect x="0" y="0" width="${pxW.toFixed(1)}" height="${pxH.toFixed(1)}" fill="#0b1221" stroke="#475569" stroke-width="1"></rect>
         ${rects}
+        ${cutLines}
       </svg>
       <div class="muted small" style="margin-top:2px">Лист ${si + 1} из ${sheets.length}</div>`;
     host.appendChild(wrap);
