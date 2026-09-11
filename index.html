@@ -107,6 +107,32 @@ function saveState(){
       priceMaterials: $('#priceMaterials').value
     }));
   }catch(e){/* хранилище недоступно — просто не сохраняем */}
+  saveBridge();
+}
+
+// «Мост» на страницу «Калькулятор фасада»: стены, проёмы и % обрезков в метрах,
+// чтобы полный калькулятор всегда мог продолжить работу с этими данными.
+// Проёмы задаются площадью — переводим каждый в квадрат со стороной √площадь
+// (площадь сохраняется), тип «окно». Полный калькулятор перезаписывает этим
+// свои стены/проёмы при заходе.
+const BRIDGE_KEY = 'facadeToCalcBridge';
+function saveBridge(){
+  try{
+    const bWalls = walls
+      .map(r=>({ width: Math.max(0, parseNum(r.w)), height: Math.max(0, parseNum(r.h)), count: Math.max(1, Math.floor(parseNum(r.c) || 1)) }))
+      .filter(w=> w.width > 0 && w.height > 0);
+    const openCount = Math.floor(Math.max(0, parseNum($('#openingCount').value)));
+    const openAreaEach = Math.max(0, parseNum($('#openingArea').value));
+    const bOpenings = (openCount > 0 && openAreaEach > 0)
+      ? [{ type:'window', width: Math.sqrt(openAreaEach), height: Math.sqrt(openAreaEach), count: openCount }]
+      : [];
+    localStorage.setItem(BRIDGE_KEY, JSON.stringify({
+      walls: bWalls,
+      openings: bOpenings,
+      waste: Math.max(0, parseNum($('#waste').value)),
+      ts: Date.now()
+    }));
+  }catch(e){/* хранилище недоступно — перенос просто не сработает */}
 }
 
 function renderWalls(){
@@ -186,6 +212,7 @@ $('#addWall').addEventListener('click', ()=>{
 loadState();
 renderWalls();
 compute();
+saveBridge();
 </script>
 </body>
 </html>
