@@ -190,12 +190,12 @@ const LAYOUT_EL_STROKE = '#64748b';  // обычная линия (сгиб и �
 const LAYOUT_CUT_COLOR = '#38bdf8';  // яркая голубая линия реза (отрез)
 function collectLayoutElements(){
   const els = [];
-  const pushCut = (items, h, cutIndex)=>{
+  const pushCut = (items, h, cutIndex, cutNo)=>{
     const ws = (items || []).map(v=>parseNum(v)).filter(w=>w > 0);
-    ws.forEach((w, i)=> els.push({ w, h, cutIndex, isFirst: i === 0, isLast: i === ws.length - 1 }));
+    ws.forEach((w, i)=> els.push({ w, h, cutIndex, cutNo, isFirst: i === 0, isLast: i === ws.length - 1 }));
   };
-  tapeCuts.forEach((cut, ci)=>{ const h = parseNum(cut.height); if(h > 0) pushCut(cut.items, h, ci); });
-  const gh = groupHeightMm(); if(gh > 0) pushCut(tapeEntries, gh, -1);
+  tapeCuts.forEach((cut, ci)=>{ const h = parseNum(cut.height); if(h > 0) pushCut(cut.items, h, ci, ci + 1); });
+  const gh = groupHeightMm(); if(gh > 0) pushCut(tapeEntries, gh, -1, null);
   return els;
 }
 function packLayout(els, W, H){
@@ -230,50 +230,24 @@ function renderLayout(){
   const { sheets, oversize } = packLayout(els, W, H);
   const uLbl = unitLabel(sheetUnit), uf = unitFactor(sheetUnit);
   const dim = mm => formatTapeNumber(mm / uf);
-  info.textContent = `Лист ${dim(W)} × ${dim(H)} ${uLbl} · элементов: ${els.length} · листов: ${sheets.length}`;
+  info.textContent = `Лист ${dim(W)} × ${dim(H)} ${uLbl} · элементов: ${els.length} · листов: ${sheets.length} · нажмите на лист, чтобы увеличить`;
 
   if(oversize.length){
     over.style.display = 'block';
     over.innerHTML = `<div>⚠ Не помещается на лист: ${oversize.length} шт. (элемент шире или выше листа).</div>`;
   }
 
-  // Масштаб: лист вписываем в рамку не шире 150px и не выше 430px, сохраняя пропорции.
+  // Масштаб миниатюры: лист вписываем в рамку не шире 150px и не выше 430px.
   const scale = Math.min(150 / W, 430 / H);
   const MAX_SHEETS = 12;
   sheets.slice(0, MAX_SHEETS).forEach((sh, si)=>{
-    const pxW = Math.max(1, W * scale), pxH = Math.max(1, H * scale);
+    const title = `Лист ${si + 1} из ${sheets.length}`;
     const wrap = document.createElement('div');
-    wrap.style.flex = '0 0 auto'; wrap.style.textAlign = 'center';
-    let rects = '', cutLines = '';
-    sh.shelves.forEach(shelf=>{
-      shelf.items.forEach(it=>{
-        const x = it.x * scale, y = shelf.y * scale, w = it.w * scale, h = it.h * scale;
-        // Тонкие элементы получают минимальную ширину на рисунке (в расчёте — как есть).
-        const wDraw = Math.max(w, 2);
-        const xDraw = Math.min(x, Math.max(0, pxW - wDraw));
-        rects += `<rect x="${xDraw.toFixed(2)}" y="${y.toFixed(2)}" width="${wDraw.toFixed(2)}" height="${h.toFixed(2)}" fill="${LAYOUT_EL_FILL}" stroke="${LAYOUT_EL_STROKE}" stroke-width="0.8"></rect>`;
-        // Подпись — только длина. Кегль подгоняем под ширину элемента: на широких
-        // видно сразу, на тонких мельчает и читается при увеличении (зум).
-        const label = dim(it.w);
-        const fs = Math.min(9, wDraw / (0.62 * label.length + 0.3), h / 2.2);
-        if(fs >= 1){
-          const cx = (xDraw + wDraw / 2).toFixed(2);
-          const cy = (y + h / 2 + fs * 0.35).toFixed(2);
-          rects += `<text x="${cx}" y="${cy}" text-anchor="middle" font-size="${fs.toFixed(2)}" fill="#e5e7eb">${label}</text>`;
-        }
-        // Голубая линия реза по краям отсечки (место «✂ Отсечь»).
-        const yTop = y.toFixed(2), yBot = (y + h).toFixed(2);
-        if(it.el.isFirst){ const lx = xDraw.toFixed(2); cutLines += `<line x1="${lx}" y1="${yTop}" x2="${lx}" y2="${yBot}" stroke="${LAYOUT_CUT_COLOR}" stroke-width="2"></line>`; }
-        if(it.el.isLast){ const rx = (xDraw + wDraw).toFixed(2); cutLines += `<line x1="${rx}" y1="${yTop}" x2="${rx}" y2="${yBot}" stroke="${LAYOUT_CUT_COLOR}" stroke-width="2"></line>`; }
-      });
-    });
-    wrap.innerHTML =
-      `<svg width="${pxW.toFixed(1)}" height="${pxH.toFixed(1)}" style="border-radius:4px">
-        <rect x="0" y="0" width="${pxW.toFixed(1)}" height="${pxH.toFixed(1)}" fill="#0b1221" stroke="#475569" stroke-width="1"></rect>
-        ${rects}
-        ${cutLines}
-      </svg>
-      <div class="muted small" style="margin-top:2px">Лист ${si + 1} из ${sheets.length}</div>`;
+    wrap.style.flex = '0 0 auto'; wrap.style.textAlign = 'center'; wrap.style.cursor = 'zoom-in';
+    wrap.title = 'Нажмите, чтобы увеличить';
+    wrap.innerHTML = buildSheetSvg(sh.shelves, scale, W, H, dim, 9)
+      + `<div class="muted small" style="margin-top:2px">${title}</div>`;
+    wrap.addEventListener('click', ()=> openLayoutZoom(sh.shelves, W, H, dim, title));
     host.appendChild(wrap);
   });
   if(sheets.length > MAX_SHEETS){
@@ -282,6 +256,73 @@ function renderLayout(){
     more.textContent = `…и ещё ${sheets.length - MAX_SHEETS} лист(ов)`;
     host.appendChild(more);
   }
+}
+// Рисуем один лист в SVG. Порядок слоёв: заливки → линии реза → подписи длин →
+// номера отсечек (чтобы цифра всегда была ПОВЕРХ голубой линии). maxFs — предел
+// кегля (в увеличении больше, поэтому мелкие числа становятся читаемыми).
+function buildSheetSvg(shelves, scale, W, H, dim, maxFs){
+  const pxW = Math.max(1, W * scale), pxH = Math.max(1, H * scale);
+  let fills = '', cutLines = '', labels = '', nos = '';
+  shelves.forEach(shelf=>{
+    shelf.items.forEach(it=>{
+      const x = it.x * scale, y = shelf.y * scale, w = it.w * scale, h = it.h * scale;
+      const wDraw = Math.max(w, 2);
+      const xDraw = Math.min(x, Math.max(0, pxW - wDraw));
+      fills += `<rect x="${xDraw.toFixed(2)}" y="${y.toFixed(2)}" width="${wDraw.toFixed(2)}" height="${h.toFixed(2)}" fill="${LAYOUT_EL_FILL}" stroke="${LAYOUT_EL_STROKE}" stroke-width="0.8"></rect>`;
+      const label = dim(it.w);
+      const fs = Math.min(maxFs, wDraw / (0.62 * label.length + 0.3), h / 2.2);
+      if(fs >= 1){
+        const cx = (xDraw + wDraw / 2).toFixed(2);
+        const cy = (y + h / 2 + fs * 0.35).toFixed(2);
+        // тонкая тёмная обводка, чтобы число читалось поверх голубой линии
+        labels += `<text x="${cx}" y="${cy}" text-anchor="middle" font-size="${fs.toFixed(2)}" fill="#f1f5f9" style="paint-order:stroke" stroke="#0b1221" stroke-width="${(fs*0.16).toFixed(2)}">${label}</text>`;
+      }
+      const yTop = y.toFixed(2), yBot = (y + h).toFixed(2);
+      if(it.el.isFirst){ const lx = xDraw.toFixed(2); cutLines += `<line x1="${lx}" y1="${yTop}" x2="${lx}" y2="${yBot}" stroke="${LAYOUT_CUT_COLOR}" stroke-width="2"></line>`; }
+      if(it.el.isLast){ const rx = (xDraw + wDraw).toFixed(2); cutLines += `<line x1="${rx}" y1="${yTop}" x2="${rx}" y2="${yBot}" stroke="${LAYOUT_CUT_COLOR}" stroke-width="2"></line>`; }
+      if(it.el.isFirst && it.el.cutNo){
+        const nfs = Math.min(maxFs, Math.max(7, h / 6));
+        nos += `<text x="${(xDraw + 2).toFixed(2)}" y="${(y + nfs + 1).toFixed(2)}" font-size="${nfs.toFixed(2)}" font-weight="700" fill="#e2e8f0" style="paint-order:stroke" stroke="#0b1221" stroke-width="${(nfs*0.18).toFixed(2)}">№${it.el.cutNo}</text>`;
+      }
+    });
+  });
+  return `<svg width="${pxW.toFixed(1)}" height="${pxH.toFixed(1)}" style="border-radius:4px">`
+    + `<rect x="0" y="0" width="${pxW.toFixed(1)}" height="${pxH.toFixed(1)}" fill="#0b1221" stroke="#475569" stroke-width="1"></rect>`
+    + fills + cutLines + labels + nos + `</svg>`;
+}
+// Увеличение листа: оверлей с крупной прокручиваемой схемой и кнопками «+/−».
+let tapeZoomState = null;
+function openLayoutZoom(shelves, W, H, dim, title){
+  let ov = document.getElementById('tapeZoomOverlay');
+  if(!ov){
+    ov = document.createElement('div'); ov.id = 'tapeZoomOverlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(2,6,23,.94);z-index:9999;display:none;flex-direction:column';
+    ov.innerHTML =
+      `<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;color:#e5e7eb;flex:0 0 auto">
+         <b id="tzTitle" style="flex:1;min-width:0"></b>
+         <button class="btn ghost small" id="tzOut" title="Отдалить">−</button>
+         <button class="btn ghost small" id="tzIn" title="Приблизить">+</button>
+         <button class="btn ghost small" id="tzClose">✕ Закрыть</button>
+       </div>
+       <div id="tzBody" style="flex:1;overflow:auto;text-align:center;padding:12px"></div>`;
+    document.body.appendChild(ov);
+    const close = ()=>{ ov.style.display = 'none'; };
+    ov.querySelector('#tzClose').addEventListener('click', close);
+    ov.addEventListener('click', e=>{ if(e.target === ov) close(); });
+    document.addEventListener('keydown', e=>{ if(e.key === 'Escape' && ov.style.display !== 'none') close(); });
+    ov.querySelector('#tzIn').addEventListener('click', ()=>{ tapeZoomState.zoom = Math.min(16, tapeZoomState.zoom * 1.5); drawTapeZoom(); });
+    ov.querySelector('#tzOut').addEventListener('click', ()=>{ tapeZoomState.zoom = Math.max(0.5, tapeZoomState.zoom / 1.5); drawTapeZoom(); });
+  }
+  const fit = Math.min((window.innerWidth * 0.95) / W, (window.innerHeight * 0.78) / H);
+  tapeZoomState = { shelves, W, H, dim, base: fit, zoom: 1 };
+  ov.querySelector('#tzTitle').textContent = title;
+  ov.style.display = 'flex';
+  drawTapeZoom();
+}
+function drawTapeZoom(){
+  const z = tapeZoomState; if(!z) return;
+  const s = z.base * z.zoom;
+  document.getElementById('tzBody').innerHTML = buildSheetSvg(z.shelves, s, z.W, z.H, z.dim, 40);
 }
 
 function renderTape(){
