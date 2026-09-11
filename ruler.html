@@ -293,11 +293,17 @@ function renderLayout(){
         const cx = (xDraw + wDraw / 2).toFixed(2);
         rects += `<rect x="${xDraw.toFixed(2)}" y="${y.toFixed(2)}" width="${wDraw.toFixed(2)}" height="${h.toFixed(2)}" fill="${fill}" stroke="${col[1]}" stroke-width="1"></rect>`;
         if(w >= 16 && h >= 24){
-          // номер отсечки + ширина
+          // номер отсечки + ширина (по горизонтали)
           rects += `<text x="${cx}" y="${(y + h/2 - 2).toFixed(2)}" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">${it.el.no}</text>`;
           rects += `<text x="${cx}" y="${(y + h/2 + 10).toFixed(2)}" text-anchor="middle" font-size="8" fill="#e5e7eb">${dim(it.w)}</text>`;
         } else if(w >= 13 && h >= 11){
           rects += `<text x="${cx}" y="${(y + h/2 + 3).toFixed(2)}" text-anchor="middle" font-size="8" font-weight="700" fill="#fff">${it.el.no}</text>`;
+        } else if(h >= 18){
+          // Узкий элемент: подпись не влезает по горизонтали — пишем вертикально
+          // (вдоль высоты), чтобы цифра была видна даже на тонком элементе.
+          const cyv = (y + h / 2).toFixed(2);
+          const txt = (h >= 42) ? (it.el.no + ' · ' + dim(it.w)) : dim(it.w);
+          rects += `<text x="${cx}" y="${cyv}" transform="rotate(-90 ${cx} ${cyv})" text-anchor="middle" font-size="8" font-weight="700" fill="#fff" style="paint-order:stroke" stroke="${col[0]}" stroke-width="0.6">${txt}</text>`;
         }
       });
     });
