@@ -74,6 +74,13 @@
         </div>
       </details>
     </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 6px;font-size:18px">Раскрой на листе</h2>
+      <div class="muted small" id="tapeLayoutInfo" style="margin-bottom:8px">—</div>
+      <div id="tapeLayoutOver" class="warn-msg" style="display:none"></div>
+      <div id="tapeLayout" class="table-scroll" style="display:flex;gap:14px;align-items:flex-start;padding-bottom:6px"></div>
+    </div>
   </div>
 <script>
 const $ = (s,root=document)=>root.querySelector(s);
@@ -164,10 +171,98 @@ function updateTapeTotals(){
   $('#tapeGroupPill').classList.toggle('near-limit', nearLimit(g));
   $('#tapeGroupH').classList.toggle('over-height', overHeight(groupHeightMm()));
   saveTapeSummary(grand, tapeCutsArea() + tapeGroupArea());   // для страницы «Калькулятор»
+  renderLayout();
 }
 // Итог линейки для показа на странице 2 (общий итог, единица, площадь).
 function saveTapeSummary(grandMm, areaM2){
   try{ localStorage.setItem('facadeTapeSummary', JSON.stringify({ grandMm, unit: tapeUnit, areaM2 })); }catch(e){}
+}
+
+// --- Раскрой на листе -------------------------------------------------------
+// Собираем все элементы (текущая группа + отсечки), каждый — прямоугольник
+// ширина(мм) × высота(мм). Укладываем полочным методом: встык по ширине листа,
+// перенос на новую полку при нехватке ширины и на новый лист при нехватке высоты.
+// Полка держит одну высоту, поэтому элементы одной отсечки лежат вместе.
+function collectLayoutElements(){
+  const els = [];
+  tapeCuts.forEach((cut, ci)=>{
+    const h = parseNum(cut.height);
+    (cut.items || []).forEach(v=>{ const w = parseNum(v); if(w > 0 && h > 0) els.push({ w, h, src: '№' + (ci + 1) }); });
+  });
+  const gh = groupHeightMm();
+  tapeEntries.forEach(v=>{ const w = parseNum(v); if(w > 0 && gh > 0) els.push({ w, h: gh, src: 'группа' }); });
+  return els;
+}
+function packLayout(els, W, H){
+  const sheets = [], oversize = [];
+  const EPS = 1e-6;
+  let sheet = null, shelf = null;
+  const newSheet = ()=>{ sheet = { shelves: [], usedH: 0 }; sheets.push(sheet); shelf = null; };
+  els.forEach(el=>{
+    if(el.w > W + EPS || el.h > H + EPS){ oversize.push(el); return; }
+    if(!sheet) newSheet();
+    if(!shelf || Math.abs(shelf.h - el.h) > EPS || shelf.usedW + el.w > W + EPS){
+      if(sheet.usedH + el.h > H + EPS) newSheet();
+      shelf = { y: sheet.usedH, h: el.h, usedW: 0, items: [] };
+      sheet.shelves.push(shelf);
+      sheet.usedH += el.h;
+    }
+    shelf.items.push({ x: shelf.usedW, w: el.w, h: el.h });
+    shelf.usedW += el.w;
+  });
+  return { sheets, oversize };
+}
+function renderLayout(){
+  const host = $('#tapeLayout'); if(!host) return;
+  const info = $('#tapeLayoutInfo'), over = $('#tapeLayoutOver');
+  const W = tapeSheetLen(), H = tapeSheetH();
+  const els = collectLayoutElements();
+  host.innerHTML = '';
+  over.style.display = 'none'; over.innerHTML = '';
+  if(W <= 0 || H <= 0){ info.textContent = 'Задайте ширину и высоту листа, чтобы увидеть раскрой.'; return; }
+  if(!els.length){ info.textContent = 'Добавьте элементы (с высотой), чтобы увидеть раскрой.'; return; }
+
+  const { sheets, oversize } = packLayout(els, W, H);
+  const uLbl = unitLabel(sheetUnit), uf = unitFactor(sheetUnit);
+  const dim = mm => formatTapeNumber(mm / uf);
+  info.textContent = `Лист ${dim(W)} × ${dim(H)} ${uLbl} · элементов: ${els.length} · листов: ${sheets.length}`;
+
+  if(oversize.length){
+    over.style.display = 'block';
+    over.innerHTML = `<div>⚠ Не помещается на лист: ${oversize.length} шт. (элемент шире или выше листа).</div>`;
+  }
+
+  // Масштаб: лист вписываем в рамку не шире 150px и не выше 430px, сохраняя пропорции.
+  const scale = Math.min(150 / W, 430 / H);
+  const MAX_SHEETS = 12;
+  sheets.slice(0, MAX_SHEETS).forEach((sh, si)=>{
+    const pxW = Math.max(1, W * scale), pxH = Math.max(1, H * scale);
+    const wrap = document.createElement('div');
+    wrap.style.flex = '0 0 auto'; wrap.style.textAlign = 'center';
+    let rects = '';
+    sh.shelves.forEach(shelf=>{
+      shelf.items.forEach(it=>{
+        const x = it.x * scale, y = shelf.y * scale, w = it.w * scale, h = it.h * scale;
+        rects += `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" fill="#0e7490" stroke="#22d3ee" stroke-width="0.7"></rect>`;
+        if(w >= 20 && h >= 11){
+          rects += `<text x="${(x + w/2).toFixed(2)}" y="${(y + h/2 + 3).toFixed(2)}" text-anchor="middle" font-size="9" fill="#e5e7eb">${dim(it.w)}</text>`;
+        }
+      });
+    });
+    wrap.innerHTML =
+      `<svg width="${pxW.toFixed(1)}" height="${pxH.toFixed(1)}" style="border-radius:4px">
+        <rect x="0" y="0" width="${pxW.toFixed(1)}" height="${pxH.toFixed(1)}" fill="#0b1221" stroke="#475569" stroke-width="1"></rect>
+        ${rects}
+      </svg>
+      <div class="muted small" style="margin-top:2px">Лист ${si + 1} из ${sheets.length}</div>`;
+    host.appendChild(wrap);
+  });
+  if(sheets.length > MAX_SHEETS){
+    const more = document.createElement('div');
+    more.className = 'muted small'; more.style.alignSelf = 'center';
+    more.textContent = `…и ещё ${sheets.length - MAX_SHEETS} лист(ов)`;
+    host.appendChild(more);
+  }
 }
 
 function renderTape(){
