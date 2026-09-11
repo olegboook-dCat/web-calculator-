@@ -178,121 +178,106 @@ function saveTapeSummary(grandMm, areaM2){
   try{ localStorage.setItem('facadeTapeSummary', JSON.stringify({ grandMm, unit: tapeUnit, areaM2 })); }catch(e){}
 }
 
-// --- Раскрой на листе -------------------------------------------------------
-// Собираем все элементы (текущая группа + отсечки), каждый — прямоугольник
-// ширина(мм) × высота(мм). Укладываем полочным методом: встык по ширине листа,
-// перенос на новую полку при нехватке ширины и на новый лист при нехватке высоты.
-// Все элементы одного нейтрального цвета. Границы отсечки (место реза «✂ Отсечь»,
-// где лист отрезается) отмечаются яркой голубой линией; линии сгиба внутри
-// отсечки и все прочие — обычные, одинаковые.
+// --- Раскрой: чертёж-развёртка по отсечкам -----------------------------------
+// Каждая отсечка рисуется отдельной развёрткой: элементы встык (сегменты панели),
+// между ними — обычные линии сгиба, по краям отсечки — голубая линия реза (отрез).
+// Размеры выносятся за пределы фигуры: длины — вдоль верхней стенки (над каждым
+// элементом), высота отсечки — вдоль левой стенки. Номер отсечки — по центру.
 const LAYOUT_EL_FILL = '#334155';    // единый цвет элемента
 const LAYOUT_EL_STROKE = '#64748b';  // обычная линия (сгиб и прочие)
 const LAYOUT_CUT_COLOR = '#38bdf8';  // яркая голубая линия реза (отрез)
-function collectLayoutElements(){
-  const els = [];
-  const pushCut = (items, h, cutIndex, cutNo)=>{
-    const ws = (items || []).map(v=>parseNum(v)).filter(w=>w > 0);
-    ws.forEach((w, i)=> els.push({ w, h, cutIndex, cutNo, isFirst: i === 0, isLast: i === ws.length - 1 }));
-  };
-  tapeCuts.forEach((cut, ci)=>{ const h = parseNum(cut.height); if(h > 0) pushCut(cut.items, h, ci, ci + 1); });
-  const gh = groupHeightMm(); if(gh > 0) pushCut(tapeEntries, gh, -1, null);
-  return els;
-}
-function packLayout(els, W, H){
-  const sheets = [], oversize = [];
-  const EPS = 1e-6;
-  let sheet = null, shelf = null;
-  const newSheet = ()=>{ sheet = { shelves: [], usedH: 0 }; sheets.push(sheet); shelf = null; };
-  els.forEach(el=>{
-    if(el.w > W + EPS || el.h > H + EPS){ oversize.push(el); return; }
-    if(!sheet) newSheet();
-    if(!shelf || Math.abs(shelf.h - el.h) > EPS || shelf.usedW + el.w > W + EPS){
-      if(sheet.usedH + el.h > H + EPS) newSheet();
-      shelf = { y: sheet.usedH, h: el.h, usedW: 0, items: [] };
-      sheet.shelves.push(shelf);
-      sheet.usedH += el.h;
-    }
-    shelf.items.push({ x: shelf.usedW, w: el.w, h: el.h, el });
-    shelf.usedW += el.w;
+function collectOtsechki(){
+  const list = [];
+  tapeCuts.forEach((cut, ci)=>{
+    const h = parseNum(cut.height);
+    const items = (cut.items || []).map(v=>parseNum(v)).filter(w=>w > 0);
+    if(h > 0 && items.length) list.push({ no: ci + 1, name: cut.name || '', h, items });
   });
-  return { sheets, oversize };
+  const gh = groupHeightMm();
+  const gi = tapeEntries.map(v=>parseNum(v)).filter(w=>w > 0);
+  if(gh > 0 && gi.length) list.push({ no: null, name: '', h: gh, items: gi });
+  return list;
+}
+// Развёртка одной отсечки. maxFs — предел кегля (в увеличении больше, поэтому
+// мелкие подписи на тонких элементах становятся читаемыми).
+function buildStripSvg(ot, scale, dim, maxFs){
+  const totalW = ot.items.reduce((s, w)=> s + w, 0);
+  const stripW = Math.max(2, totalW * scale);
+  const stripH = Math.max(2, ot.h * scale);
+  const topFs = Math.min(maxFs, 14);       // кегль подписей длины (верхняя стенка)
+  const hfs = Math.min(maxFs, 13);          // кегль подписи высоты (левая стенка)
+  const TOP = topFs + 8;                     // полоса сверху под длины
+  const LEFT = Math.max(28, dim(ot.h).length * hfs * 0.62 + 12);  // место слева под высоту
+  const PADR = 8, PADB = 8;
+  const ox = LEFT, oy = TOP;
+  const svgW = ox + stripW + PADR, svgH = oy + stripH + PADB;
+  let fills = '', ticks = '', lens = '';
+  let cxmm = 0;
+  ot.items.forEach(w=>{
+    const x = ox + cxmm * scale, wpx = Math.max(2, w * scale);
+    fills += `<rect x="${x.toFixed(2)}" y="${oy.toFixed(2)}" width="${wpx.toFixed(2)}" height="${stripH.toFixed(2)}" fill="${LAYOUT_EL_FILL}" stroke="${LAYOUT_EL_STROKE}" stroke-width="0.8"></rect>`;
+    // Длина — над элементом, за пределами фигуры; кегль подгоняем под ширину,
+    // поэтому на тонком элементе подпись мелкая и читается только при увеличении.
+    const label = dim(w);
+    const fs = Math.min(topFs, wpx / (0.62 * label.length + 0.3));
+    const cx = (x + wpx / 2).toFixed(2);
+    if(fs >= 1){
+      lens += `<text x="${cx}" y="${(oy - 3).toFixed(2)}" text-anchor="middle" font-size="${fs.toFixed(2)}" fill="#cbd5e1">${label}</text>`;
+      ticks += `<line x1="${cx}" y1="${(oy - 2).toFixed(2)}" x2="${cx}" y2="${oy.toFixed(2)}" stroke="#475569" stroke-width="0.6"></line>`;
+    }
+    cxmm += w;
+  });
+  // Голубые линии реза по краям отсечки.
+  const yT = oy.toFixed(2), yB = (oy + stripH).toFixed(2);
+  let cuts = `<line x1="${ox.toFixed(2)}" y1="${yT}" x2="${ox.toFixed(2)}" y2="${yB}" stroke="${LAYOUT_CUT_COLOR}" stroke-width="2"></line>`
+           + `<line x1="${(ox + stripW).toFixed(2)}" y1="${yT}" x2="${(ox + stripW).toFixed(2)}" y2="${yB}" stroke="${LAYOUT_CUT_COLOR}" stroke-width="2"></line>`;
+  // Высота — вдоль левой стенки (за пределами фигуры).
+  const heightTxt = `<text x="${(ox - 5).toFixed(2)}" y="${(oy + stripH / 2 + hfs * 0.35).toFixed(2)}" text-anchor="end" font-size="${hfs.toFixed(2)}" fill="#cbd5e1">${dim(ot.h)}</text>`;
+  // Номер отсечки — по центру фигуры.
+  let num = '';
+  if(ot.no){
+    const nfs = Math.min(maxFs, Math.max(11, Math.min(stripH, stripW) / 3));
+    num = `<text x="${(ox + stripW / 2).toFixed(2)}" y="${(oy + stripH / 2 + nfs * 0.35).toFixed(2)}" text-anchor="middle" font-size="${nfs.toFixed(2)}" font-weight="700" fill="#e2e8f0">№${ot.no}</text>`;
+  }
+  return `<svg width="${svgW.toFixed(1)}" height="${svgH.toFixed(1)}" style="border-radius:4px;background:#0b1221">`
+    + fills + ticks + cuts + lens + heightTxt + num + `</svg>`;
 }
 function renderLayout(){
   const host = $('#tapeLayout'); if(!host) return;
   const info = $('#tapeLayoutInfo'), over = $('#tapeLayoutOver');
   const W = tapeSheetLen(), H = tapeSheetH();
-  const els = collectLayoutElements();
+  const list = collectOtsechki();
   host.innerHTML = '';
   over.style.display = 'none'; over.innerHTML = '';
-  if(W <= 0 || H <= 0){ info.textContent = 'Задайте ширину и высоту листа, чтобы увидеть раскрой.'; return; }
-  if(!els.length){ info.textContent = 'Добавьте элементы (с высотой), чтобы увидеть раскрой.'; return; }
-
-  const { sheets, oversize } = packLayout(els, W, H);
   const uLbl = unitLabel(sheetUnit), uf = unitFactor(sheetUnit);
   const dim = mm => formatTapeNumber(mm / uf);
-  info.textContent = `Лист ${dim(W)} × ${dim(H)} ${uLbl} · элементов: ${els.length} · листов: ${sheets.length} · нажмите на лист, чтобы увеличить`;
+  if(!list.length){ info.textContent = 'Добавьте элементы (с высотой), чтобы увидеть чертёж.'; return; }
 
-  if(oversize.length){
+  let oversize = 0;
+  list.forEach(ot=>{ if((H > 0 && ot.h > H) || (W > 0 && ot.items.some(w=>w > W))) oversize++; });
+  info.textContent = (W > 0 && H > 0 ? `Лист ${dim(W)} × ${dim(H)} ${uLbl} · ` : '')
+    + `отсечек: ${list.length} · нажмите, чтобы увеличить`;
+  if(oversize){
     over.style.display = 'block';
-    over.innerHTML = `<div>⚠ Не помещается на лист: ${oversize.length} шт. (элемент шире или выше листа).</div>`;
+    over.innerHTML = `<div>⚠ Не помещается на лист: ${oversize} шт. (шире или выше листа).</div>`;
   }
 
-  // Масштаб миниатюры: лист вписываем в рамку не шире 150px и не выше 430px.
-  const scale = Math.min(150 / W, 430 / H);
-  const MAX_SHEETS = 12;
-  sheets.slice(0, MAX_SHEETS).forEach((sh, si)=>{
-    const title = `Лист ${si + 1} из ${sheets.length}`;
+  list.forEach(ot=>{
+    const totalW = ot.items.reduce((s, w)=> s + w, 0);
+    const scale = Math.min(300 / totalW, 150 / ot.h);   // вписываем миниатюру
+    const title = ot.no ? ('№' + ot.no + (ot.name ? ' ' + ot.name : '')) : 'Тек. группа';
     const wrap = document.createElement('div');
     wrap.style.flex = '0 0 auto'; wrap.style.textAlign = 'center'; wrap.style.cursor = 'zoom-in';
     wrap.title = 'Нажмите, чтобы увеличить';
-    wrap.innerHTML = buildSheetSvg(sh.shelves, scale, W, H, dim, 9)
-      + `<div class="muted small" style="margin-top:2px">${title}</div>`;
-    wrap.addEventListener('click', ()=> openLayoutZoom(sh.shelves, W, H, dim, title));
+    wrap.innerHTML = buildStripSvg(ot, scale, dim, 12)
+      + `<div class="muted small" style="margin-top:2px">${escapeHtml(title)}</div>`;
+    wrap.addEventListener('click', ()=> openLayoutZoom(ot, dim, title));
     host.appendChild(wrap);
   });
-  if(sheets.length > MAX_SHEETS){
-    const more = document.createElement('div');
-    more.className = 'muted small'; more.style.alignSelf = 'center';
-    more.textContent = `…и ещё ${sheets.length - MAX_SHEETS} лист(ов)`;
-    host.appendChild(more);
-  }
 }
-// Рисуем один лист в SVG. Порядок слоёв: заливки → линии реза → подписи длин →
-// номера отсечек (чтобы цифра всегда была ПОВЕРХ голубой линии). maxFs — предел
-// кегля (в увеличении больше, поэтому мелкие числа становятся читаемыми).
-function buildSheetSvg(shelves, scale, W, H, dim, maxFs){
-  const pxW = Math.max(1, W * scale), pxH = Math.max(1, H * scale);
-  let fills = '', cutLines = '', labels = '', nos = '';
-  shelves.forEach(shelf=>{
-    shelf.items.forEach(it=>{
-      const x = it.x * scale, y = shelf.y * scale, w = it.w * scale, h = it.h * scale;
-      const wDraw = Math.max(w, 2);
-      const xDraw = Math.min(x, Math.max(0, pxW - wDraw));
-      fills += `<rect x="${xDraw.toFixed(2)}" y="${y.toFixed(2)}" width="${wDraw.toFixed(2)}" height="${h.toFixed(2)}" fill="${LAYOUT_EL_FILL}" stroke="${LAYOUT_EL_STROKE}" stroke-width="0.8"></rect>`;
-      const label = dim(it.w);
-      const fs = Math.min(maxFs, wDraw / (0.62 * label.length + 0.3), h / 2.2);
-      if(fs >= 1){
-        const cx = (xDraw + wDraw / 2).toFixed(2);
-        const cy = (y + h / 2 + fs * 0.35).toFixed(2);
-        // тонкая тёмная обводка, чтобы число читалось поверх голубой линии
-        labels += `<text x="${cx}" y="${cy}" text-anchor="middle" font-size="${fs.toFixed(2)}" fill="#f1f5f9" style="paint-order:stroke" stroke="#0b1221" stroke-width="${(fs*0.16).toFixed(2)}">${label}</text>`;
-      }
-      const yTop = y.toFixed(2), yBot = (y + h).toFixed(2);
-      if(it.el.isFirst){ const lx = xDraw.toFixed(2); cutLines += `<line x1="${lx}" y1="${yTop}" x2="${lx}" y2="${yBot}" stroke="${LAYOUT_CUT_COLOR}" stroke-width="2"></line>`; }
-      if(it.el.isLast){ const rx = (xDraw + wDraw).toFixed(2); cutLines += `<line x1="${rx}" y1="${yTop}" x2="${rx}" y2="${yBot}" stroke="${LAYOUT_CUT_COLOR}" stroke-width="2"></line>`; }
-      if(it.el.isFirst && it.el.cutNo){
-        const nfs = Math.min(maxFs, Math.max(7, h / 6));
-        nos += `<text x="${(xDraw + 2).toFixed(2)}" y="${(y + nfs + 1).toFixed(2)}" font-size="${nfs.toFixed(2)}" font-weight="700" fill="#e2e8f0" style="paint-order:stroke" stroke="#0b1221" stroke-width="${(nfs*0.18).toFixed(2)}">№${it.el.cutNo}</text>`;
-      }
-    });
-  });
-  return `<svg width="${pxW.toFixed(1)}" height="${pxH.toFixed(1)}" style="border-radius:4px">`
-    + `<rect x="0" y="0" width="${pxW.toFixed(1)}" height="${pxH.toFixed(1)}" fill="#0b1221" stroke="#475569" stroke-width="1"></rect>`
-    + fills + cutLines + labels + nos + `</svg>`;
-}
-// Увеличение листа: оверлей с крупной прокручиваемой схемой и кнопками «+/−».
+// Увеличение отсечки: оверлей с крупной прокручиваемой развёрткой и кнопками «+/−».
 let tapeZoomState = null;
-function openLayoutZoom(shelves, W, H, dim, title){
+function openLayoutZoom(ot, dim, title){
   let ov = document.getElementById('tapeZoomOverlay');
   if(!ov){
     ov = document.createElement('div'); ov.id = 'tapeZoomOverlay';
@@ -310,11 +295,12 @@ function openLayoutZoom(shelves, W, H, dim, title){
     ov.querySelector('#tzClose').addEventListener('click', close);
     ov.addEventListener('click', e=>{ if(e.target === ov) close(); });
     document.addEventListener('keydown', e=>{ if(e.key === 'Escape' && ov.style.display !== 'none') close(); });
-    ov.querySelector('#tzIn').addEventListener('click', ()=>{ tapeZoomState.zoom = Math.min(16, tapeZoomState.zoom * 1.5); drawTapeZoom(); });
-    ov.querySelector('#tzOut').addEventListener('click', ()=>{ tapeZoomState.zoom = Math.max(0.5, tapeZoomState.zoom / 1.5); drawTapeZoom(); });
+    ov.querySelector('#tzIn').addEventListener('click', ()=>{ tapeZoomState.zoom = Math.min(20, tapeZoomState.zoom * 1.5); drawTapeZoom(); });
+    ov.querySelector('#tzOut').addEventListener('click', ()=>{ tapeZoomState.zoom = Math.max(0.4, tapeZoomState.zoom / 1.5); drawTapeZoom(); });
   }
-  const fit = Math.min((window.innerWidth * 0.95) / W, (window.innerHeight * 0.78) / H);
-  tapeZoomState = { shelves, W, H, dim, base: fit, zoom: 1 };
+  const totalW = ot.items.reduce((s, w)=> s + w, 0) || 1;
+  const fit = Math.min((window.innerWidth * 0.9) / totalW, (window.innerHeight * 0.7) / (ot.h || 1));
+  tapeZoomState = { ot, dim, base: fit, zoom: 1 };
   ov.querySelector('#tzTitle').textContent = title;
   ov.style.display = 'flex';
   drawTapeZoom();
@@ -322,7 +308,7 @@ function openLayoutZoom(shelves, W, H, dim, title){
 function drawTapeZoom(){
   const z = tapeZoomState; if(!z) return;
   const s = z.base * z.zoom;
-  document.getElementById('tzBody').innerHTML = buildSheetSvg(z.shelves, s, z.W, z.H, z.dim, 40);
+  document.getElementById('tzBody').innerHTML = buildStripSvg(z.ot, s, z.dim, 40);
 }
 
 function renderTape(){
