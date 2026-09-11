@@ -32,11 +32,12 @@
 
     <div class="card">
       <h2 style="margin:0 0 4px 0;font-size:18px">Проёмы (окна / двери)</h2>
-      <div class="grid-2">
+      <div class="grid-3">
         <div><label>Количество, шт</label><input type="text" id="openingCount" inputmode="decimal" value="0"></div>
         <div><label>Площадь одного, м²</label><input type="text" id="openingArea" inputmode="decimal" value="3"></div>
+        <div><label>Цена обрамления, ₽/мп</label><input type="text" id="openingPrice" inputmode="decimal" placeholder="₽/мп"></div>
       </div>
-      <div class="muted small" style="margin-top:6px">Площадь проёмов вычитается из площади стен. По умолчанию — 3 м² на проём.</div>
+      <div class="muted small" style="margin-top:6px">Площадь проёмов вычитается из площади стен. Периметр проёмов (обрамление откосов) считается как погонные метры — из площади по формуле периметра квадрата (4×√площадь). По умолчанию — 3 м² на проём.</div>
     </div>
 
     <div class="card">
@@ -55,8 +56,10 @@
       <span class="pill">Проёмы: −<b id="rOpenings">0</b> м²</span>
       <span class="pill">Чистая площадь: <b id="rNet">0</b> м²</span>
       <span class="pill">С обрезками: <b id="rWithWaste">0</b> м²</span>
+      <span class="pill">Проёмы (обрамление): <b id="rOpeningLm">0</b> мп</span>
       <span class="pill">Работы: <b id="rWork">—</b></span>
       <span class="pill">Материалы: <b id="rMaterials">—</b></span>
+      <span class="pill">Обрамление проёмов: <b id="rOpeningCost">—</b></span>
     </div>
   </div>
 
@@ -86,6 +89,7 @@ function loadState(){
     if(Array.isArray(s.walls) && s.walls.length) walls = s.walls;
     if(s.openingCount!=null) $('#openingCount').value = s.openingCount;
     if(s.openingArea!=null) $('#openingArea').value = s.openingArea;
+    if(s.openingPrice!=null) $('#openingPrice').value = s.openingPrice;
     if(s.waste!=null) $('#waste').value = s.waste;
     if(s.priceWork!=null) $('#priceWork').value = s.priceWork;
     if(s.priceMaterials!=null) $('#priceMaterials').value = s.priceMaterials;
@@ -97,6 +101,7 @@ function saveState(){
       walls,
       openingCount: $('#openingCount').value,
       openingArea: $('#openingArea').value,
+      openingPrice: $('#openingPrice').value,
       waste: $('#waste').value,
       priceWork: $('#priceWork').value,
       priceMaterials: $('#priceMaterials').value
@@ -141,7 +146,9 @@ function wallsArea(){
 
 function compute(){
   const gross = wallsArea();
-  const openings = Math.max(0, parseNum($('#openingCount').value)) * Math.max(0, parseNum($('#openingArea').value));
+  const openCount = Math.max(0, parseNum($('#openingCount').value));
+  const openAreaEach = Math.max(0, parseNum($('#openingArea').value));
+  const openings = openCount * openAreaEach;
   const net = Math.max(0, gross - openings);
   const waste = Math.max(0, parseNum($('#waste').value));
   const withWaste = net * (1 + waste/100);
@@ -149,22 +156,30 @@ function compute(){
   const priceMaterials = Math.max(0, parseNum($('#priceMaterials').value));
   const costWork = withWaste * priceWork;
   const costMaterials = withWaste * priceMaterials;
-  const total = costWork + costMaterials;
+
+  // Площадь проёмов -> погонные метры обрамления (периметр квадрата 4×√площадь на проём).
+  const openingLm = openCount * 4 * Math.sqrt(openAreaEach);
+  const openingPrice = Math.max(0, parseNum($('#openingPrice').value));
+  const costOpenings = openingLm * openingPrice;
+
+  const total = costWork + costMaterials + costOpenings;
 
   $('#rWalls').textContent = fmtNum(gross);
   $('#rOpenings').textContent = fmtNum(openings);
   $('#rNet').textContent = fmtNum(net);
   $('#rWithWaste').textContent = fmtNum(withWaste);
+  $('#rOpeningLm').textContent = fmtNum(openingLm);
   $('#rWork').textContent = priceWork > 0 ? fmtMoney(costWork) : '—';
   $('#rMaterials').textContent = priceMaterials > 0 ? fmtMoney(costMaterials) : '—';
-  $('#rTotal').textContent = (priceWork > 0 || priceMaterials > 0) ? fmtMoney(total) : '—';
+  $('#rOpeningCost').textContent = openingPrice > 0 ? fmtMoney(costOpenings) : '—';
+  $('#rTotal').textContent = (priceWork > 0 || priceMaterials > 0 || openingPrice > 0) ? fmtMoney(total) : '—';
 }
 
 $('#addWall').addEventListener('click', ()=>{
   walls.push({w:'', h:'', c:'1'});
   renderWalls(); saveState();
 });
-['openingCount','openingArea','waste','priceWork','priceMaterials'].forEach(id=>{
+['openingCount','openingArea','openingPrice','waste','priceWork','priceMaterials'].forEach(id=>{
   $('#'+id).addEventListener('input', ()=>{ compute(); saveState(); });
 });
 
