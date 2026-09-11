@@ -13,17 +13,154 @@
       <a href="calculator.html">Калькулятор фасада</a>
       <a href="ruler.html">Линейка</a>
     </nav>
+
     <div class="card">
-      <h1 style="margin:0 0 4px;font-size:22px">Паскаль</h1>
-      <div class="placeholder">
-        <div style="font-size:40px;margin-bottom:8px">🏗️</div>
-        <div>Здесь скоро появится содержимое главной страницы.</div>
-        <div class="actions" style="justify-content:center;margin-top:16px">
-          <a class="btn primary" href="calculator.html">Калькулятор фасада</a>
-          <a class="btn" href="ruler.html">Калькулятор-линейка</a>
-        </div>
+      <h1 style="margin:0 0 4px 0;font-size:22px">Экспресс-расчёт</h1>
+      <div class="muted small">Быстрая прикидка площади и стоимости. Полный расчёт — на странице «Калькулятор фасада».</div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 4px 0;font-size:18px">Площадь стен</h2>
+      <div class="actions"><button class="btn" id="addWall">+ Добавить стену</button></div>
+      <div class="table-scroll">
+      <table id="wallsTbl">
+        <thead><tr><th>Ширина, м</th><th>Высота, м</th><th>Кол-во</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
       </div>
     </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 4px 0;font-size:18px">Проёмы (окна / двери)</h2>
+      <div class="grid-2">
+        <div><label>Количество, шт</label><input type="text" id="openingCount" inputmode="decimal" value="0"></div>
+        <div><label>Площадь одного, м²</label><input type="text" id="openingArea" inputmode="decimal" value="3"></div>
+      </div>
+      <div class="muted small" style="margin-top:6px">Площадь проёмов вычитается из площади стен. По умолчанию — 3 м² на проём.</div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 4px 0;font-size:18px">Цена и отходы</h2>
+      <div class="grid-2">
+        <div><label>Обрезки, %</label><input type="text" id="waste" inputmode="decimal" value="25"></div>
+        <div><label>Цена, ₽/м²</label><input type="text" id="price" inputmode="decimal" placeholder="₽/м²"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 8px 0;font-size:18px">Результат</h2>
+      <div class="total-badge">Итого стоимость <b id="rTotal">—</b></div>
+      <span class="pill">Площадь стен: <b id="rWalls">0</b> м²</span>
+      <span class="pill">Проёмы: −<b id="rOpenings">0</b> м²</span>
+      <span class="pill">Чистая площадь: <b id="rNet">0</b> м²</span>
+      <span class="pill">С обрезками: <b id="rWithWaste">0</b> м²</span>
+    </div>
   </div>
+
+<script>
+const $ = (s,root=document)=>root.querySelector(s);
+function parseNum(v){
+  const s = String(v==null?'':v).replace(',', '.').replace(/\s+/g,'');
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+function fmtNum(n){
+  // до сотых, без лишних нулей
+  return (Math.round(n*100)/100).toLocaleString('ru-RU', {maximumFractionDigits:2});
+}
+function fmtMoney(n){
+  return Math.round(n).toLocaleString('ru-RU') + ' ₽';
+}
+
+const STORE_KEY = 'facadeExpress';
+let walls = [{w:'', h:'', c:'1'}];
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(!raw) return;
+    const s = JSON.parse(raw);
+    if(Array.isArray(s.walls) && s.walls.length) walls = s.walls;
+    if(s.openingCount!=null) $('#openingCount').value = s.openingCount;
+    if(s.openingArea!=null) $('#openingArea').value = s.openingArea;
+    if(s.waste!=null) $('#waste').value = s.waste;
+    if(s.price!=null) $('#price').value = s.price;
+  }catch(e){/* пустой/битый черновик — начинаем с нуля */}
+}
+function saveState(){
+  try{
+    localStorage.setItem(STORE_KEY, JSON.stringify({
+      walls,
+      openingCount: $('#openingCount').value,
+      openingArea: $('#openingArea').value,
+      waste: $('#waste').value,
+      price: $('#price').value
+    }));
+  }catch(e){/* хранилище недоступно — просто не сохраняем */}
+}
+
+function renderWalls(){
+  const tb = $('#wallsTbl tbody');
+  tb.innerHTML = '';
+  walls.forEach((row, i)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="text" inputmode="decimal" data-k="w" data-i="${i}" value="${row.w}"></td>
+      <td><input type="text" inputmode="decimal" data-k="h" data-i="${i}" value="${row.h}"></td>
+      <td><input type="text" inputmode="decimal" data-k="c" data-i="${i}" value="${row.c}"></td>
+      <td><button class="btn ghost small" data-del="${i}" style="padding:4px 10px">✕</button></td>`;
+    tb.appendChild(tr);
+  });
+  tb.querySelectorAll('input').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const i = +e.target.dataset.i, k = e.target.dataset.k;
+      walls[i][k] = e.target.value;
+      compute(); saveState();
+    });
+  });
+  tb.querySelectorAll('button[data-del]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      walls.splice(+b.dataset.del, 1);
+      if(!walls.length) walls.push({w:'', h:'', c:'1'});
+      renderWalls(); compute(); saveState();
+    });
+  });
+}
+
+function wallsArea(){
+  return walls.reduce((sum, r)=>{
+    const w = parseNum(r.w), h = parseNum(r.h), c = parseNum(r.c) || 0;
+    return sum + Math.max(0, w) * Math.max(0, h) * Math.max(0, c);
+  }, 0);
+}
+
+function compute(){
+  const gross = wallsArea();
+  const openings = Math.max(0, parseNum($('#openingCount').value)) * Math.max(0, parseNum($('#openingArea').value));
+  const net = Math.max(0, gross - openings);
+  const waste = Math.max(0, parseNum($('#waste').value));
+  const withWaste = net * (1 + waste/100);
+  const price = Math.max(0, parseNum($('#price').value));
+  const total = withWaste * price;
+
+  $('#rWalls').textContent = fmtNum(gross);
+  $('#rOpenings').textContent = fmtNum(openings);
+  $('#rNet').textContent = fmtNum(net);
+  $('#rWithWaste').textContent = fmtNum(withWaste);
+  $('#rTotal').textContent = price > 0 ? fmtMoney(total) : '—';
+}
+
+$('#addWall').addEventListener('click', ()=>{
+  walls.push({w:'', h:'', c:'1'});
+  renderWalls(); saveState();
+});
+['openingCount','openingArea','waste','price'].forEach(id=>{
+  $('#'+id).addEventListener('input', ()=>{ compute(); saveState(); });
+});
+
+loadState();
+renderWalls();
+compute();
+</script>
 </body>
 </html>
