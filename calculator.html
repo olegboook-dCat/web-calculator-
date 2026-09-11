@@ -475,6 +475,24 @@ function loadDraftRaw(){
   try{ return localStorage.getItem(DRAFT_KEY); }catch(e){ return null; }
 }
 
+// Перенос данных со страницы «Главная» (экспресс-расчёт). Стены/проёмы/обрезки
+// приходят в метрах через общий ключ localStorage. По решению пользователя
+// «Главная всегда обновляет»: при наличии данных на Главной они перезаписывают
+// стены, проёмы и % обрезков в калькуляторе. Если на Главной пусто — не трогаем.
+const BRIDGE_KEY = 'facadeToCalcBridge';
+function applyBridge(){
+  let b = null;
+  try{ const r = localStorage.getItem(BRIDGE_KEY); b = r ? JSON.parse(r) : null; }catch(e){}
+  if(!b) return false;
+  const walls = Array.isArray(b.walls) ? b.walls : [];
+  const openings = Array.isArray(b.openings) ? b.openings : [];
+  if(!walls.length && !openings.length) return false;
+  state.walls = walls.map(w=>({ width:+w.width||0, height:+w.height||0, count:Math.max(1, Math.floor(+w.count||1)) }));
+  state.openings = openings.map(o=>({ type: o.type==='door'?'door':'window', width:+o.width||0, height:+o.height||0, count:Math.max(1, Math.floor(+o.count||1)) }));
+  if(b.waste != null && isFinite(+b.waste)) $('#waste').value = b.waste;
+  return true;
+}
+
 function updateUndoRedoButtons(){
   $('#btnUndo').disabled = historyStack.length === 0;
   $('#btnRedo').disabled = redoStack.length === 0;
@@ -1315,9 +1333,26 @@ if(draftRaw){
   renderTables();
   recalc();
 }
+// Перенос со страницы «Главная»: если там есть данные — они перезаписывают
+// стены/проёмы/обрезки, чтобы можно было продолжить работу здесь.
+if(applyBridge()){
+  renderTables();
+  recalc();
+  $('#draftNote').textContent = 'Стены, проёмы и % обрезков перенесены со страницы «Главная».';
+}
 lastSnapshot = snapshotState();
 saveDraft(lastSnapshot);
 updateUndoRedoButtons();
+
+// Живое обновление, если Главную меняют в другой вкладке.
+window.addEventListener('storage', function(e){
+  if(e.key === BRIDGE_KEY && applyBridge()){
+    renderTables();
+    recalc();
+    commitHistoryImmediate();
+    $('#draftNote').textContent = 'Стены, проёмы и % обрезков перенесены со страницы «Главная».';
+  }
+});
 
 // --- Итог линейки на этой странице (читается из localStorage, пишется страницей «Линейка») ---
 (function(){
