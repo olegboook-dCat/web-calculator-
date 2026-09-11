@@ -284,8 +284,14 @@ function renderLayout(){
         const col = layoutColor(it.el.cutIndex);
         // чередование оттенка у соседних элементов одной отсечки
         const fill = (it.el.eIdx % 2 === 1) ? lightenHex(col[0], 0.22) : col[0];
-        const cx = (x + w / 2).toFixed(2);
-        rects += `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" fill="${fill}" stroke="${col[1]}" stroke-width="1"></rect>`;
+        // Очень тонкие элементы (напр. 2 мм) в масштабе — доли пикселя и не видны.
+        // В расчёте они учитываются полностью; здесь лишь даём минимальную ширину
+        // на рисунке, чтобы элемент было видно (не выходя за край листа).
+        const MIN_EL_PX = 2;
+        const wDraw = Math.max(w, MIN_EL_PX);
+        const xDraw = Math.min(x, Math.max(0, pxW - wDraw));
+        const cx = (xDraw + wDraw / 2).toFixed(2);
+        rects += `<rect x="${xDraw.toFixed(2)}" y="${y.toFixed(2)}" width="${wDraw.toFixed(2)}" height="${h.toFixed(2)}" fill="${fill}" stroke="${col[1]}" stroke-width="1"></rect>`;
         if(w >= 16 && h >= 24){
           // номер отсечки + ширина
           rects += `<text x="${cx}" y="${(y + h/2 - 2).toFixed(2)}" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">${it.el.no}</text>`;
