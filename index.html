@@ -41,9 +41,10 @@
 
     <div class="card">
       <h2 style="margin:0 0 4px 0;font-size:18px">Цена и отходы</h2>
-      <div class="grid-2">
+      <div class="grid-3">
         <div><label>Обрезки, %</label><input type="text" id="waste" inputmode="decimal" value="25"></div>
-        <div><label>Цена, ₽/м²</label><input type="text" id="price" inputmode="decimal" placeholder="₽/м²"></div>
+        <div><label>Цена работ, ₽/м²</label><input type="text" id="priceWork" inputmode="decimal" placeholder="₽/м²"></div>
+        <div><label>Цена материалов, ₽/м²</label><input type="text" id="priceMaterials" inputmode="decimal" placeholder="₽/м²"></div>
       </div>
     </div>
 
@@ -54,6 +55,8 @@
       <span class="pill">Проёмы: −<b id="rOpenings">0</b> м²</span>
       <span class="pill">Чистая площадь: <b id="rNet">0</b> м²</span>
       <span class="pill">С обрезками: <b id="rWithWaste">0</b> м²</span>
+      <span class="pill">Работы: <b id="rWork">—</b></span>
+      <span class="pill">Материалы: <b id="rMaterials">—</b></span>
     </div>
   </div>
 
@@ -84,7 +87,8 @@ function loadState(){
     if(s.openingCount!=null) $('#openingCount').value = s.openingCount;
     if(s.openingArea!=null) $('#openingArea').value = s.openingArea;
     if(s.waste!=null) $('#waste').value = s.waste;
-    if(s.price!=null) $('#price').value = s.price;
+    if(s.priceWork!=null) $('#priceWork').value = s.priceWork;
+    if(s.priceMaterials!=null) $('#priceMaterials').value = s.priceMaterials;
   }catch(e){/* пустой/битый черновик — начинаем с нуля */}
 }
 function saveState(){
@@ -94,7 +98,8 @@ function saveState(){
       openingCount: $('#openingCount').value,
       openingArea: $('#openingArea').value,
       waste: $('#waste').value,
-      price: $('#price').value
+      priceWork: $('#priceWork').value,
+      priceMaterials: $('#priceMaterials').value
     }));
   }catch(e){/* хранилище недоступно — просто не сохраняем */}
 }
@@ -140,21 +145,26 @@ function compute(){
   const net = Math.max(0, gross - openings);
   const waste = Math.max(0, parseNum($('#waste').value));
   const withWaste = net * (1 + waste/100);
-  const price = Math.max(0, parseNum($('#price').value));
-  const total = withWaste * price;
+  const priceWork = Math.max(0, parseNum($('#priceWork').value));
+  const priceMaterials = Math.max(0, parseNum($('#priceMaterials').value));
+  const costWork = withWaste * priceWork;
+  const costMaterials = withWaste * priceMaterials;
+  const total = costWork + costMaterials;
 
   $('#rWalls').textContent = fmtNum(gross);
   $('#rOpenings').textContent = fmtNum(openings);
   $('#rNet').textContent = fmtNum(net);
   $('#rWithWaste').textContent = fmtNum(withWaste);
-  $('#rTotal').textContent = price > 0 ? fmtMoney(total) : '—';
+  $('#rWork').textContent = priceWork > 0 ? fmtMoney(costWork) : '—';
+  $('#rMaterials').textContent = priceMaterials > 0 ? fmtMoney(costMaterials) : '—';
+  $('#rTotal').textContent = (priceWork > 0 || priceMaterials > 0) ? fmtMoney(total) : '—';
 }
 
 $('#addWall').addEventListener('click', ()=>{
   walls.push({w:'', h:'', c:'1'});
   renderWalls(); saveState();
 });
-['openingCount','openingArea','waste','price'].forEach(id=>{
+['openingCount','openingArea','waste','priceWork','priceMaterials'].forEach(id=>{
   $('#'+id).addEventListener('input', ()=>{ compute(); saveState(); });
 });
 
