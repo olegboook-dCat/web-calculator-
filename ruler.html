@@ -144,6 +144,8 @@ const TAPE_ROTATE_KEY = 'facadeTapeAllowRotate'; // разрешён ли пов
 const TAPE_STD_KEY = 'facadeTapeSheetStandard';  // выбранный стандарт ширин листа
 let cutKerf = 3;           // зазор между деталями на резку, мм
 let allowRotate = true;    // разрешать поворот деталей на 90° при укладке
+let tapeSheetsCount = 0;   // листов в раскрое (для итога и страницы «Полный расчёт»)
+let tapeOversizeCount = 0; // деталей, не влезших ни на один лист
 let sheetUnit = 'mm';      // общая единица для ширины и высоты листа
 let tapeCutsUnit = 'mm';   // единица «Суммы отсечек»
 function unitFactor(u){ return u === 'm' ? 1000 : (u === 'cm' ? 10 : 1); }  // → в мм
@@ -201,13 +203,14 @@ function updateTapeTotals(){
   $('#tapeAreaTotal').textContent = formatArea(tapeCutsArea() + tapeGroupArea());  // отсечки + текущая
   $('#tapeGroupPill').classList.toggle('near-limit', nearLimit(g));
   $('#tapeGroupH').classList.toggle('over-height', overHeight(groupHeightMm()));
-  saveTapeSummary(grand, tapeCutsArea() + tapeGroupArea());   // для страницы «Калькулятор»
   renderLayout();
-  renderCutPlan();
+  renderCutPlan();                                            // обновляет tapeSheetsCount/tapeOversizeCount
+  saveTapeSummary(grand, tapeCutsArea() + tapeGroupArea());   // для страницы «Полный расчёт» (после раскроя)
 }
-// Итог линейки для показа на странице 2 (общий итог, единица, площадь).
+// Итог линейки для показа на странице «Полный расчёт»
+// (общий итог, единица, площадь, количество листов раскроя).
 function saveTapeSummary(grandMm, areaM2){
-  try{ localStorage.setItem('facadeTapeSummary', JSON.stringify({ grandMm, unit: tapeUnit, areaM2 })); }catch(e){}
+  try{ localStorage.setItem('facadeTapeSummary', JSON.stringify({ grandMm, unit: tapeUnit, areaM2, sheets: tapeSheetsCount, oversize: tapeOversizeCount })); }catch(e){}
 }
 
 // --- Раскрой: чертёж-развёртка по отсечкам -----------------------------------
@@ -527,6 +530,7 @@ function renderCutPlan(){
   const sheetsPill = $('#tapeSheetsTotal'), sheetsExtra = $('#tapeSheetsExtra');
   if(!list.length){
     info.textContent = 'Сделайте отсечки («✂ Отсечь»), чтобы разложить их на листах.';
+    tapeSheetsCount = 0; tapeOversizeCount = 0;
     if(sheetsPill) sheetsPill.textContent = '—';
     if(sheetsExtra) sheetsExtra.textContent = '';
     return;
@@ -545,6 +549,7 @@ function renderCutPlan(){
   const breakdown = byWidth.map(x=> `${x.w}×${dim(L)}: ${x.n}`).join(', ');
   info.textContent = `Листов: ${sheets.length}` + (breakdown ? ` (${breakdown})` : '')
     + ` · КИМ ${kimAll}% (использование листа) · нажмите на лист, чтобы увеличить`;
+  tapeSheetsCount = sheets.length; tapeOversizeCount = oversize.length;
   if(sheetsPill) sheetsPill.textContent = sheets.length;
   if(sheetsExtra) sheetsExtra.textContent = oversize.length ? ` +${oversize.length} не влезло` : '';
   if(oversize.length){
