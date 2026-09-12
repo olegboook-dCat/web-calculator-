@@ -737,9 +737,17 @@ function renderTapeCuts(){
       inp.type = 'text'; inp.className = 'cut-name-edit'; inp.placeholder = 'Название'; inp.value = cut.name || '';
       nameView.replaceWith(inp); inp.focus(); inp.select();
       let done = false;
-      const commit = ()=>{ if(done) return; done = true; cut.name = inp.value.trim(); saveTapeCuts(); renderTapeCuts(); };
-      inp.addEventListener('keydown', ev=>{ if(ev.key === 'Enter'){ ev.preventDefault(); commit(); } else if(ev.key === 'Escape'){ done = true; renderTapeCuts(); } });
-      inp.addEventListener('blur', commit);
+      // Завершаем правку на месте: возвращаем span вместо полной перерисовки
+      // списка. Иначе blur при клике по другому полю пересоздал бы таблицу и
+      // «съел» этот клик — правка сбивалась.
+      const finish = (save)=>{
+        if(done) return; done = true;
+        if(save){ cut.name = inp.value.trim(); saveTapeCuts(); }
+        nameView.textContent = cut.name || '';
+        inp.replaceWith(nameView);
+      };
+      inp.addEventListener('keydown', ev=>{ if(ev.key === 'Enter'){ ev.preventDefault(); finish(true); } else if(ev.key === 'Escape'){ ev.preventDefault(); finish(false); } });
+      inp.addEventListener('blur', ()=> finish(true));
     };
     noBtn.title = 'Нажмите, чтобы задать/изменить название';
     nameView.title = 'Нажмите, чтобы изменить название';
