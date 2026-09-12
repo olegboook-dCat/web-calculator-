@@ -84,6 +84,10 @@
 
     <div class="card">
       <h2 style="margin:0 0 6px;font-size:18px">Раскрой на листе (для фрезера)</h2>
+      <div class="muted small" style="margin:0 0 8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <label>Ширина реза (пропил): <input type="text" inputmode="decimal" id="cutKerf" value="3" style="width:52px"> мм</label>
+        <span>— зазор между деталями, который «съедает» фреза</span>
+      </div>
       <div class="muted small" id="cutPlanInfo" style="margin-bottom:8px">—</div>
       <div id="cutPlanOver" class="warn-msg" style="display:none"></div>
       <div id="cutPlan" class="table-scroll" style="display:flex;gap:14px;align-items:flex-start;padding-bottom:6px"></div>
@@ -129,6 +133,8 @@ const TAPE_UNIT_KEY = 'facadeTapeGrandUnit';       // единицы «Обще�
 const TAPE_SHEET_UNIT_KEY = 'facadeTapeSheetUnit'; // общие единицы листа (ширина+высота)
 const TAPE_GROUPH_UNIT_KEY = 'facadeTapeGroupHUnit'; // единицы высоты элемента
 const TAPE_CUTSUNIT_KEY = 'facadeTapeCutsUnit'; // единицы «Суммы отсечек»
+const TAPE_KERF_KEY = 'facadeTapeCutKerf';      // ширина реза (пропил), мм
+let cutKerf = 3;           // зазор между деталями на резку, мм
 let sheetUnit = 'mm';      // общая единица для ширины и высоты листа
 let tapeCutsUnit = 'mm';   // единица «Суммы отсечек»
 function unitFactor(u){ return u === 'm' ? 1000 : (u === 'cm' ? 10 : 1); }  // → в мм
@@ -335,8 +341,10 @@ function drawTapeZoom(){
 const SHEET_W1 = 1220, SHEET_W2 = 1500;
 const LAYOUT_RED_FILL = '#3a1f27', LAYOUT_RED_STROKE = '#f87171';
 function panelWidth(ot){ return ot.items.reduce((s, w)=> s + w, 0); }
+// Ширина реза (пропил) k резервируется как зазор после каждой детали по ширине
+// и между рядами по длине, чтобы на станке детали не «съелись» фрезой.
 function packInto(items, Wsheet, L, red){
-  const sheets = [], EPS = 1e-6;
+  const sheets = [], EPS = 1e-6, k = Math.max(0, cutKerf);
   let sheet = null, shelf = null;
   const newSheet = ()=>{ sheet = { Wsheet, L, red, shelves: [], usedLen: 0 }; sheets.push(sheet); shelf = null; };
   items.forEach(ot=>{
@@ -348,8 +356,8 @@ function packInto(items, Wsheet, L, red){
       sheet.shelves.push(shelf);
     }
     shelf.items.push({ x: shelf.usedW, y: shelf.y, pw, ph, ot });
-    shelf.usedW += pw;
-    const nh = Math.max(shelf.h, ph); sheet.usedLen += (nh - shelf.h); shelf.h = nh;
+    shelf.usedW += pw + k;                                   // деталь + пропил
+    const nh = Math.max(shelf.h, ph + k); sheet.usedLen += (nh - shelf.h); shelf.h = nh;
   });
   return sheets;
 }
@@ -408,14 +416,21 @@ function renderCutPlan(){
 
   const { sheets, oversize } = buildCutPlan(list, L);
   const n1220 = sheets.filter(s=>!s.red).length, n1500 = sheets.filter(s=>s.red).length;
-  info.textContent = `Листов: ${sheets.length} (1220×${dim(L)}: ${n1220}` + (n1500 ? `, 1500×${dim(L)}: ${n1500}` : '') + `) · нажмите на лист, чтобы увеличить`;
+  // КИМ — коэффициент использования материала: площадь деталей / площадь листа.
+  const usedArea = sheet => sheet.shelves.reduce((s, sh)=> s + sh.items.reduce((a, it)=> a + it.pw * it.ph, 0), 0);
+  const kimPct = (used, total)=> total > 0 ? Math.round(used / total * 100) : 0;
+  const totalUsed = sheets.reduce((s, sh)=> s + usedArea(sh), 0);
+  const totalArea = sheets.reduce((s, sh)=> s + sh.Wsheet * sh.L, 0);
+  const kimAll = kimPct(totalUsed, totalArea);
+  info.textContent = `Листов: ${sheets.length} (1220×${dim(L)}: ${n1220}` + (n1500 ? `, 1500×${dim(L)}: ${n1500}` : '')
+    + `) · КИМ ${kimAll}% (использование листа) · нажмите на лист, чтобы увеличить`;
   if(oversize.length){
     over.style.display = 'block';
     over.innerHTML = `<div>⚠ Не помещается ни на 1220, ни на 1500: ${oversize.length} шт. (шире ${dim(SHEET_W2)} или выше ${dim(L)}).</div>`;
   }
   const scale = Math.min(150 / SHEET_W2, 430 / L);   // общий масштаб миниатюр
   sheets.forEach((sheet, si)=>{
-    const title = `Лист ${sheet.Wsheet}×${dim(L)}` + (sheet.red ? ' (не влез на 1220)' : '');
+    const title = `Лист ${sheet.Wsheet}×${dim(L)} · КИМ ${kimPct(usedArea(sheet), sheet.Wsheet * sheet.L)}%` + (sheet.red ? ' (не влез на 1220)' : '');
     const wrap = document.createElement('div');
     wrap.style.flex = '0 0 auto'; wrap.style.textAlign = 'center'; wrap.style.cursor = 'zoom-in';
     wrap.title = 'Нажмите, чтобы увеличить';
@@ -713,6 +728,7 @@ on($('#tapeUnitToggle'),'click', e=>{ e.preventDefault(); tapeUnit = CYCLE[(CYCL
 on($('#tapeCutsUnitToggle'),'click', e=>{ e.preventDefault(); tapeCutsUnit = CYCLE[(CYCLE.indexOf(tapeCutsUnit) + 1) % CYCLE.length]; saveCutsUnit(); updateTapeTotals(); });
 on($('#btnExportDXF'),'click', e=>{ e.preventDefault(); exportCutPlan('dxf'); });
 on($('#btnExportSVG'),'click', e=>{ e.preventDefault(); exportCutPlan('svg'); });
+on($('#cutKerf'),'input', e=>{ cutKerf = Math.max(0, parseNum(e.target.value)); try{ localStorage.setItem(TAPE_KERF_KEY, String(cutKerf)); }catch(err){} renderCutPlan(); });
 
 try{ const sv = localStorage.getItem(TAPE_SHEET_KEY); if(sv != null) $('#tapeSheet').value = sv; }catch(e){}
 try{ const hs = localStorage.getItem(TAPE_HSTD_KEY); if(hs != null) $('#tapeHeightStd').value = hs; }catch(e){}
@@ -720,6 +736,7 @@ try{ const gh = localStorage.getItem(TAPE_GROUPH_KEY); if(gh != null) $('#tapeGr
 try{ const u = localStorage.getItem(TAPE_UNIT_KEY); if(u === 'm' || u === 'cm' || u === 'mm') tapeUnit = u; }catch(e){}
 try{ const cu = localStorage.getItem(TAPE_CUTSUNIT_KEY); if(cu==='m'||cu==='cm'||cu==='mm') tapeCutsUnit = cu; }catch(e){}
 try{ const su = localStorage.getItem(TAPE_SHEET_UNIT_KEY); if(su==='m'||su==='cm'||su==='mm') sheetUnit = su; }catch(e){}
+try{ const kf = localStorage.getItem(TAPE_KERF_KEY); if(kf != null && Number.isFinite(Number(kf))){ cutKerf = Math.max(0, Number(kf)); $('#cutKerf').value = kf; } }catch(e){}
 $('#tapeSheetUnitToggle').textContent = unitLabel(sheetUnit);
 try{ const ghu = localStorage.getItem(TAPE_GROUPH_UNIT_KEY); if(ghu==='m'||ghu==='cm'||ghu==='mm'){ $('#tapeGroupHUnit').value = ghu; groupHUnitPrev = ghu; } }catch(e){}
 tapeEntries = loadTapeArray(TAPE_KEY);
