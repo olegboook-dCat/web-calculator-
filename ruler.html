@@ -87,6 +87,15 @@
       <div class="muted small" id="cutPlanInfo" style="margin-bottom:8px">—</div>
       <div id="cutPlanOver" class="warn-msg" style="display:none"></div>
       <div id="cutPlan" class="table-scroll" style="display:flex;gap:14px;align-items:flex-start;padding-bottom:6px"></div>
+      <div class="actions" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn" id="btnExportDXF">⬇ Чертёж DXF (для станка)</button>
+        <button class="btn" id="btnExportSVG">⬇ Чертёж SVG</button>
+        <span class="muted small" id="exportInfo"></span>
+      </div>
+      <details class="muted small" style="margin-top:6px">
+        <summary style="cursor:pointer">ⓘ Про экспорт чертежей</summary>
+        <div style="margin-top:6px">Выгружает раскрой в реальных размерах (мм) для программы фрезерного станка (CAM). Все листы — в одном файле, разложены рядом с зазором и подписаны. Слои: <b>CUT</b> — контур реза панели, <b>FOLD</b> — линии сгиба, <b>SHEET</b> — габарит листа, <b>LABEL</b> — номера. <b>DXF</b> (AutoCAD R12) открывают ArtCAM, Aspire, Fusion 360, nanoCAD и почти любой CAM. <b>SVG</b> — для лазеров, Inkscape и предпросмотра. Порядок реза, диаметр фрезы, обороты и подачи задаются уже в программе станка.</div>
+      </details>
     </div>
   </div>
 <script>
@@ -417,6 +426,136 @@ function renderCutPlan(){
   });
 }
 
+// --- Экспорт раскроя для фрезерного станка (DXF / SVG) -----------------------
+// Геометрия выгружается в реальных размерах (мм). Все листы кладём в один файл
+// рядом друг с другом с зазором и подписью. Слои: SHEET (габарит листа),
+// CUT (контур реза панели), FOLD (линии сгиба между сегментами), TEXT (номера).
+const EXPORT_GAP = 100;       // зазор между листами в выгрузке, мм
+const EXPORT_LABEL_H = 40;    // кегль подписей в выгрузке, мм
+const EXPORT_LAYERS = [       // имя, цвет AutoCAD ACI, цвет для SVG
+  { name: 'SHEET', aci: 8, svg: '#9aa4b2' },
+  { name: 'CUT',   aci: 5, svg: '#0047ab' },
+  { name: 'FOLD',  aci: 3, svg: '#2e8b57' },
+  { name: 'LABEL', aci: 7, svg: '#111111' },
+];
+// Раскладываем все листы плана рядом по горизонтали и собираем примитивы
+// (в координатах SVG: X вправо, Y вниз, начало — левый-верхний угол первого листа).
+function collectCutPlanPrimitives(){
+  const list = collectOtsechki().filter(ot=> ot.no);   // только отсечки (без текущей группы)
+  const L = tapeSheetH() || 4000;
+  const { sheets, oversize } = buildCutPlan(list, L);
+  const rects = [], lines = [], texts = [];
+  let ox = 0, maxL = 0;
+  sheets.forEach((sheet, si)=>{
+    maxL = Math.max(maxL, sheet.L);
+    rects.push({ layer: 'SHEET', x: ox, y: 0, w: sheet.Wsheet, h: sheet.L });
+    sheet.shelves.forEach(shelf=>{
+      shelf.items.forEach(it=>{
+        const px = ox + it.x, py = it.y;
+        rects.push({ layer: 'CUT', x: px, y: py, w: it.pw, h: it.ph });
+        // линии сгиба — на внутренних границах сегментов панели
+        let cum = 0;
+        it.ot.items.forEach((w, idx)=>{
+          cum += w;
+          if(idx < it.ot.items.length - 1)
+            lines.push({ layer: 'FOLD', x1: px + cum, y1: py, x2: px + cum, y2: py + it.ph });
+        });
+        if(it.ot.no){
+          const fs = Math.min(EXPORT_LABEL_H, Math.max(20, Math.min(it.pw, it.ph) / 3));
+          texts.push({ layer: 'LABEL', x: px + it.pw / 2, y: py + it.ph / 2, h: fs, dxf: 'N' + it.ot.no, svg: '№' + it.ot.no });
+        }
+      });
+    });
+    const lbl = `${sheet.Wsheet}x${Math.round(sheet.L)}` + (sheet.red ? ' (>1220)' : '');
+    texts.push({ layer: 'LABEL', x: ox + sheet.Wsheet / 2, y: sheet.L + EXPORT_LABEL_H * 1.1, h: EXPORT_LABEL_H,
+                 dxf: `Sheet ${si + 1} ${lbl}`, svg: `Лист ${si + 1} · ${sheet.Wsheet}×${Math.round(sheet.L)}` + (sheet.red ? ' (не влез на 1220)' : '') });
+    ox += sheet.Wsheet + EXPORT_GAP;
+  });
+  const totalW = Math.max(0, ox - EXPORT_GAP);
+  const totalH = maxL + EXPORT_LABEL_H * 2;   // запас снизу под подписи листов
+  return { rects, lines, texts, totalW, totalH, sheets, oversize };
+}
+// Скачивание текстового файла в нужной кодировке.
+function downloadExportFile(filename, text, mime){
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  setTimeout(()=> URL.revokeObjectURL(url), 1000);
+}
+function exportDateStamp(){ return new Date().toISOString().slice(0, 10); }
+// --- DXF (AutoCAD R12 / AC1009) — максимально совместимый ASCII-формат --------
+// Пары «код\nзначение». Ось Y переворачиваем (в DXF вверх — плюс), чтобы чертёж
+// открывался «правильной стороной».
+function buildDxf(prim){
+  const { rects, lines, texts, totalH } = prim;
+  const g = [];                                   // накопитель пар код/значение
+  const p = (code, val)=>{ g.push(code, String(val)); };
+  const fy = y => (totalH - y).toFixed(3);        // переворот Y
+  const fx = x => x.toFixed(3);
+  p(0,'SECTION'); p(2,'HEADER');
+  p(9,'$ACADVER'); p(1,'AC1009');
+  p(9,'$INSUNITS'); p(70,4);                       // 4 = миллиметры
+  p(0,'ENDSEC');
+  // таблицы: тип линии CONTINUOUS + слои
+  p(0,'SECTION'); p(2,'TABLES');
+  p(0,'TABLE'); p(2,'LTYPE'); p(70,1);
+  p(0,'LTYPE'); p(2,'CONTINUOUS'); p(70,0); p(3,'Solid line'); p(72,65); p(73,0); p(40,0);
+  p(0,'ENDTAB');
+  p(0,'TABLE'); p(2,'LAYER'); p(70, EXPORT_LAYERS.length + 1);
+  p(0,'LAYER'); p(2,'0'); p(70,0); p(62,7); p(6,'CONTINUOUS');
+  EXPORT_LAYERS.forEach(l=>{ p(0,'LAYER'); p(2,l.name); p(70,0); p(62,l.aci); p(6,'CONTINUOUS'); });
+  p(0,'ENDTAB'); p(0,'ENDSEC');
+  // сущности
+  p(0,'SECTION'); p(2,'ENTITIES');
+  const polyRect = (layer, x, y, w, h)=>{
+    // замкнутый POLYLINE из 4 вершин — CAM видит его как единый контур профиля
+    p(0,'POLYLINE'); p(8,layer); p(66,1); p(70,1); p(10,0); p(20,0); p(30,0);
+    const corners = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+    corners.forEach(c=>{ p(0,'VERTEX'); p(8,layer); p(10,fx(c[0])); p(20,fy(c[1])); });
+    p(0,'SEQEND');
+  };
+  rects.forEach(r=> polyRect(r.layer, r.x, r.y, r.w, r.h));
+  lines.forEach(l=>{ p(0,'LINE'); p(8,l.layer); p(10,fx(l.x1)); p(20,fy(l.y1)); p(11,fx(l.x2)); p(21,fy(l.y2)); });
+  texts.forEach(t=>{ p(0,'TEXT'); p(8,t.layer); p(10,fx(t.x)); p(20,fy(t.y)); p(40,t.h.toFixed(3)); p(1,t.dxf); p(72,1); p(73,2); p(11,fx(t.x)); p(21,fy(t.y)); });
+  p(0,'ENDSEC'); p(0,'EOF');
+  return g.join('\n') + '\n';
+}
+// --- SVG — реальные размеры в мм, слои через <g>, ось Y как в SVG (вниз) ------
+function buildSvg(prim){
+  const { rects, lines, texts, totalW, totalH } = prim;
+  const col = name => (EXPORT_LAYERS.find(l=> l.name === name) || {}).svg || '#000';
+  let body = '';
+  EXPORT_LAYERS.forEach(l=>{
+    let g = '';
+    if(l.name === 'FOLD')
+      lines.filter(x=> x.layer === l.name).forEach(x=>{ g += `<line x1="${x.x1.toFixed(2)}" y1="${x.y1.toFixed(2)}" x2="${x.x2.toFixed(2)}" y2="${x.y2.toFixed(2)}" stroke="${l.svg}" stroke-width="1" stroke-dasharray="8 6"/>`; });
+    if(l.name === 'SHEET' || l.name === 'CUT')
+      rects.filter(x=> x.layer === l.name).forEach(x=>{ g += `<rect x="${x.x.toFixed(2)}" y="${x.y.toFixed(2)}" width="${x.w.toFixed(2)}" height="${x.h.toFixed(2)}" fill="none" stroke="${l.svg}" stroke-width="${l.name === 'CUT' ? 2 : 1}"${l.name === 'SHEET' ? ' stroke-dasharray="20 12"' : ''}/>`; });
+    if(l.name === 'LABEL')
+      texts.filter(x=> x.layer === l.name).forEach(x=>{ g += `<text x="${x.x.toFixed(2)}" y="${x.y.toFixed(2)}" font-size="${x.h.toFixed(2)}" font-family="sans-serif" text-anchor="middle" dominant-baseline="central" fill="${l.svg}">${escapeHtml(x.svg)}</text>`; });
+    if(g) body += `<g id="${l.name}" data-layer="${l.name}" stroke-linecap="round">${g}</g>`;
+  });
+  return `<?xml version="1.0" encoding="UTF-8"?>\n`
+    + `<svg xmlns="http://www.w3.org/2000/svg" width="${totalW.toFixed(2)}mm" height="${totalH.toFixed(2)}mm" `
+    + `viewBox="0 0 ${totalW.toFixed(2)} ${totalH.toFixed(2)}">\n${body}\n</svg>\n`;
+}
+// Общая проверка + сообщение перед выгрузкой.
+function exportCutPlan(kind){
+  const prim = collectCutPlanPrimitives();
+  const info = $('#exportInfo');
+  if(!prim.sheets.length){
+    if(info) info.textContent = 'Нет раскроя: сделайте отсечки с высотой.';
+    return;
+  }
+  const stamp = exportDateStamp();
+  if(kind === 'dxf') downloadExportFile(`raskroy-${stamp}.dxf`, buildDxf(prim), 'application/dxf');
+  else               downloadExportFile(`raskroy-${stamp}.svg`, buildSvg(prim), 'image/svg+xml;charset=utf-8');
+  if(info){
+    const over = prim.oversize.length ? ` · не помещаются: ${prim.oversize.length} шт. (в файл не вошли)` : '';
+    info.textContent = `Выгружено: ${prim.sheets.length} лист(ов), ${kind.toUpperCase()}${over}`;
+  }
+}
+
 function renderTape(){
   const body = $('#tapeTbl tbody'); body.innerHTML='';
   tapeEntries.forEach((val,idx)=>{
@@ -572,6 +711,8 @@ on($('#tapeGroupH'),'input', e=>{ saveGroupH(); updateTapeTotals(); });
 on($('#tapeGroupHUnit'),'change', e=>{ changeGroupHUnit(); });
 on($('#tapeUnitToggle'),'click', e=>{ e.preventDefault(); tapeUnit = CYCLE[(CYCLE.indexOf(tapeUnit) + 1) % CYCLE.length]; try{ localStorage.setItem(TAPE_UNIT_KEY, tapeUnit); }catch(err){} updateTapeTotals(); });
 on($('#tapeCutsUnitToggle'),'click', e=>{ e.preventDefault(); tapeCutsUnit = CYCLE[(CYCLE.indexOf(tapeCutsUnit) + 1) % CYCLE.length]; saveCutsUnit(); updateTapeTotals(); });
+on($('#btnExportDXF'),'click', e=>{ e.preventDefault(); exportCutPlan('dxf'); });
+on($('#btnExportSVG'),'click', e=>{ e.preventDefault(); exportCutPlan('svg'); });
 
 try{ const sv = localStorage.getItem(TAPE_SHEET_KEY); if(sv != null) $('#tapeSheet').value = sv; }catch(e){}
 try{ const hs = localStorage.getItem(TAPE_HSTD_KEY); if(hs != null) $('#tapeHeightStd').value = hs; }catch(e){}
