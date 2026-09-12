@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Паскаль — Калькулятор фасада</title>
+  <title>Паскаль — Полный расчёт</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="wrap">
     <nav class="nav">
-      <a href="index.html">Главная</a>
-      <a href="calculator.html" class="active">Калькулятор фасада</a>
+      <a href="index.html">Быстрый расчёт</a>
+      <a href="calculator.html" class="active">Полный расчёт</a>
       <a href="ruler.html">Линейка</a>
     </nav>
     <div class="card">
@@ -481,10 +481,10 @@ function loadDraftRaw(){
   try{ return localStorage.getItem(DRAFT_KEY); }catch(e){ return null; }
 }
 
-// Перенос данных со страницы «Главная» (экспресс-расчёт). Стены/проёмы/обрезки
+// Перенос данных со страницы «Быстрый расчёт». Стены/проёмы/обрезки
 // приходят в метрах через общий ключ localStorage. По решению пользователя
-// «Главная всегда обновляет»: при наличии данных на Главной они перезаписывают
-// стены, проёмы и % обрезков в калькуляторе. Если на Главной пусто — не трогаем.
+// «Быстрый расчёт всегда обновляет»: при наличии данных там они перезаписывают
+// стены, проёмы и % обрезков в калькуляторе. Если там пусто — не трогаем.
 const BRIDGE_KEY = 'facadeToCalcBridge';
 function applyBridge(){
   let b = null;
@@ -1359,12 +1359,12 @@ if(draftRaw){
   renderTables();
   recalc();
 }
-// Перенос со страницы «Главная»: если там есть данные — они перезаписывают
+// Перенос со страницы «Быстрый расчёт»: если там есть данные — они перезаписывают
 // стены/проёмы/обрезки, чтобы можно было продолжить работу здесь.
 if(applyBridge()){
   renderTables();
   recalc();
-  $('#draftNote').textContent = 'Стены, проёмы и % обрезков перенесены со страницы «Главная».';
+  $('#draftNote').textContent = 'Стены, проёмы и % обрезков перенесены со страницы «Быстрый расчёт».';
 }
 lastSnapshot = snapshotState();
 saveDraft(lastSnapshot);
@@ -1376,7 +1376,7 @@ window.addEventListener('storage', function(e){
     renderTables();
     recalc();
     commitHistoryImmediate();
-    $('#draftNote').textContent = 'Стены, проёмы и % обрезков перенесены со страницы «Главная».';
+    $('#draftNote').textContent = 'Стены, проёмы и % обрезков перенесены со страницы «Быстрый расчёт».';
   }
 });
 
