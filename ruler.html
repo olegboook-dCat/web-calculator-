@@ -62,6 +62,7 @@
             <span class="pill">Сумма отсечек: <b id="tapeCutsSum">0</b> <button class="btn ghost small" id="tapeCutsUnitToggle" style="padding:1px 8px" title="Переключить единицы">мм</button></span>
             <span class="pill">Площадь тек. группы: <b id="tapeGroupArea">0.00</b> м²</span>
             <span class="pill">Итого площадь: <b id="tapeAreaTotal">0.00</b> м²</span>
+            <span class="pill" style="font-size:16px">Листов: <b id="tapeSheetsTotal">—</b><span class="muted small" id="tapeSheetsExtra"></span></span>
             <span class="pill" style="font-size:16px">Общий итог: <b id="tapeGrand">0</b> <button class="btn ghost small" id="tapeUnitToggle" style="padding:1px 8px" title="Переключить единицы">мм</button></span>
           </div>
           <div id="tapeCutsWrap" style="margin-top:10px;display:none">
@@ -523,7 +524,13 @@ function renderCutPlan(){
   const dim = mm => formatTapeNumber(mm / uf);
   host.innerHTML = '';
   over.style.display = 'none'; over.innerHTML = '';
-  if(!list.length){ info.textContent = 'Сделайте отсечки («✂ Отсечь»), чтобы разложить их на листах.'; return; }
+  const sheetsPill = $('#tapeSheetsTotal'), sheetsExtra = $('#tapeSheetsExtra');
+  if(!list.length){
+    info.textContent = 'Сделайте отсечки («✂ Отсечь»), чтобы разложить их на листах.';
+    if(sheetsPill) sheetsPill.textContent = '—';
+    if(sheetsExtra) sheetsExtra.textContent = '';
+    return;
+  }
 
   const { sheets, oversize } = buildCutPlan(list, L);
   const widths = currentWidths(), maxW = widths[widths.length - 1];
@@ -538,6 +545,8 @@ function renderCutPlan(){
   const breakdown = byWidth.map(x=> `${x.w}×${dim(L)}: ${x.n}`).join(', ');
   info.textContent = `Листов: ${sheets.length}` + (breakdown ? ` (${breakdown})` : '')
     + ` · КИМ ${kimAll}% (использование листа) · нажмите на лист, чтобы увеличить`;
+  if(sheetsPill) sheetsPill.textContent = sheets.length;
+  if(sheetsExtra) sheetsExtra.textContent = oversize.length ? ` +${oversize.length} не влезло` : '';
   if(oversize.length){
     over.style.display = 'block';
     over.innerHTML = `<div>⚠ Не помещается на лист: ${oversize.length} шт. (шире ${dim(maxW)} или выше ${dim(L)}).</div>`;
