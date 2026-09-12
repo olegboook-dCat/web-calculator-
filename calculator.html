@@ -237,6 +237,7 @@
       <div class="muted small" style="margin-bottom:6px">Считается на странице «Линейка» — здесь показывается её текущий результат.</div>
       <span class="pill" style="font-size:16px">Общий итог: <b id="sumGrand">—</b></span>
       <span class="pill" style="font-size:16px">Итого площадь: <b id="sumArea">—</b></span>
+      <span class="pill" style="font-size:16px">Листов: <b id="sumSheets">—</b><span class="muted small" id="sumSheetsExtra"></span></span>
       <div class="actions" style="margin-top:8px"><a class="btn" href="ruler.html">Открыть линейку →</a></div>
     </div>
   </div>
@@ -1391,10 +1392,13 @@ window.addEventListener('storage', function(e){
     let s = null;
     try{ const r = localStorage.getItem('facadeTapeSummary'); s = r ? JSON.parse(r) : null; }catch(e){}
     const g = document.getElementById('sumGrand'), a = document.getElementById('sumArea');
+    const sh = document.getElementById('sumSheets'), shx = document.getElementById('sumSheetsExtra');
     if(!g || !a) return;
-    if(!s){ g.textContent = '—'; a.textContent = '—'; return; }
+    if(!s){ g.textContent = '—'; a.textContent = '—'; if(sh) sh.textContent = '—'; if(shx) shx.textContent = ''; return; }
     g.textContent = fmtGrand(Number(s.grandMm) || 0, s.unit || 'mm');
     a.textContent = ((Number(s.areaM2) || 0).toFixed(2)) + ' м²';
+    if(sh) sh.textContent = (s.sheets != null ? s.sheets : '—');
+    if(shx) shx.textContent = (Number(s.oversize) > 0) ? ` +${s.oversize} не влезло` : '';
   }
   window.addEventListener('storage', function(e){ if(e.key === 'facadeTapeSummary') render(); });
   document.addEventListener('visibilitychange', function(){ if(!document.hidden) render(); });
