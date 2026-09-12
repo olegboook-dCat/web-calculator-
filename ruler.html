@@ -85,6 +85,10 @@
     <div class="card">
       <h2 style="margin:0 0 6px;font-size:18px">Раскрой на листе (для фрезера)</h2>
       <div class="muted small" style="margin:0 0 8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <label>Стандарт листа: <select id="cutStandard"></select></label>
+        <span>— ширины листа для раскроя (высота — в поле «Лист — высота» выше)</span>
+      </div>
+      <div class="muted small" style="margin:0 0 8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <label>Ширина реза (пропил): <input type="text" inputmode="decimal" id="cutKerf" value="3" style="width:52px"> мм</label>
         <label style="display:inline-flex;align-items:center;gap:4px"><input type="checkbox" id="cutRotate" checked> поворот деталей</label>
         <span>— пропил «съедает» фреза; поворот на 90° экономит лист (выкл., если у листа есть направление/текстура)</span>
@@ -136,6 +140,7 @@ const TAPE_GROUPH_UNIT_KEY = 'facadeTapeGroupHUnit'; // единицы высо�
 const TAPE_CUTSUNIT_KEY = 'facadeTapeCutsUnit'; // единицы «Суммы отсечек»
 const TAPE_KERF_KEY = 'facadeTapeCutKerf';      // ширина реза (пропил), мм
 const TAPE_ROTATE_KEY = 'facadeTapeAllowRotate'; // разрешён ли поворот деталей
+const TAPE_STD_KEY = 'facadeTapeSheetStandard';  // выбранный стандарт ширин листа
 let cutKerf = 3;           // зазор между деталями на резку, мм
 let allowRotate = true;    // разрешать поворот деталей на 90° при укладке
 let sheetUnit = 'mm';      // общая единица для ширины и высоты листа
@@ -341,7 +346,20 @@ function drawTapeZoom(){
 // вдоль ширины листа, высота вдоль длины листа. Стандартные листы 1220×4000 и
 // 1500×4000: если панель шире 1220 — кладём на 1500 и подсвечиваем красным;
 // шире 1500 или выше длины листа — не помещается (тоже красным).
-const SHEET_W1 = 1220, SHEET_W2 = 1500;
+// Стандартные наборы ширин листа для раскроя (высота листа задаётся отдельно
+// полем «Лист — высота»). Раскрой кладёт деталь на самый узкий подходящий лист.
+const SHEET_STANDARDS = [
+  { id: '1220_1500', label: '1220 / 1500 — композит, металл', widths: [1220, 1500] },
+  { id: '1000_1250', label: '1000 / 1250 — сталь, жесть',     widths: [1000, 1250] },
+  { id: '1250',      label: '1250 — ГКЛ, ОСП, фанера',        widths: [1250] },
+  { id: '1220',      label: '1220',                            widths: [1220] },
+  { id: '1500',      label: '1500',                            widths: [1500] },
+];
+let sheetStandard = '1220_1500';    // выбранный набор стандартных ширин
+function currentWidths(){
+  const s = SHEET_STANDARDS.find(x=> x.id === sheetStandard);
+  return (s ? s.widths : [1220, 1500]).slice().sort((a, b)=> a - b);
+}
 const LAYOUT_RED_FILL = '#3a1f27', LAYOUT_RED_STROKE = '#f87171';
 function panelWidth(ot){ return ot.items.reduce((s, w)=> s + w, 0); }
 // --- Оптимизирующая укладка: FFD (First-Fit-Decreasing) + поворот деталей ----
@@ -417,26 +435,35 @@ const NEST_SORTS = [
 ];
 // Лучший план для заданной установки поворота: раскидываем детали по 1220/1500,
 // ориентируем и перебираем укладки (2 упаковщика × порядки), берём минимум площади.
-function planForRotation(list, L, rot){
-  const g1 = [], g2 = [], oversize = [];
-  list.forEach(ot=>{
-    const Worig = panelWidth(ot), Horig = ot.h;
-    if(chooseOrient(Worig, Horig, SHEET_W1, L, rot)) g1.push(ot);        // помещается на 1220
-    else if(chooseOrient(Worig, Horig, SHEET_W2, L, rot)) g2.push(ot);   // только на 1500
-    else oversize.push(ot);                                             // не помещается
-  });
-  const orient = (arr, W)=> arr.map(ot=>{ const o = chooseOrient(panelWidth(ot), ot.h, W, L, rot); return { pw: o.pw, ph: o.ph, ot, rot: o.rot }; });
-  const or1 = orient(g1, SHEET_W1), or2 = orient(g2, SHEET_W2);
+// Лучшая укладка одной группы деталей на листы ширины W (перебор порядков ×
+// двух упаковщиков, берём минимум площади). red — пометка «шире минимального».
+function bestPackGroup(oriented, W, L, red){
   let best = null;
   NEST_SORTS.forEach(sf=>{
-    const s1 = sf ? or1.slice().sort(sf) : or1, s2 = sf ? or2.slice().sort(sf) : or2;
+    const s = sf ? oriented.slice().sort(sf) : oriented;
     [packFFD, packNextFit].forEach(pack=>{
-      const sheets = pack(s1, SHEET_W1, L, false).concat(pack(s2, SHEET_W2, L, true));
+      const sheets = pack(s, W, L, red);
       const area = planSheetArea(sheets);
       if(!best || area < best.area || (area === best.area && sheets.length < best.sheets.length)) best = { sheets, area };
     });
   });
-  return { sheets: best.sheets, area: best.area, oversize };
+  return best.sheets;
+}
+function planForRotation(list, L, rot){
+  const widths = currentWidths(), minW = widths[0];
+  const groups = widths.map(()=> []), oversize = [];
+  list.forEach(ot=>{
+    const Worig = panelWidth(ot), Horig = ot.h;
+    const gi = widths.findIndex(w=> chooseOrient(Worig, Horig, w, L, rot));   // самый узкий подходящий
+    if(gi < 0) oversize.push(ot); else groups[gi].push(ot);
+  });
+  let sheets = [];
+  groups.forEach((arr, gi)=>{
+    const W = widths[gi];
+    const oriented = arr.map(ot=>{ const o = chooseOrient(panelWidth(ot), ot.h, W, L, rot); return { pw: o.pw, ph: o.ph, ot, rot: o.rot }; });
+    sheets = sheets.concat(bestPackGroup(oriented, W, L, W > minW));
+  });
+  return { sheets, area: planSheetArea(sheets), oversize };
 }
 function buildCutPlan(list, L){
   // Даже при разрешённом повороте держим неповёрнутый вариант в кандидатах, чтобы
@@ -499,22 +526,25 @@ function renderCutPlan(){
   if(!list.length){ info.textContent = 'Сделайте отсечки («✂ Отсечь»), чтобы разложить их на листах.'; return; }
 
   const { sheets, oversize } = buildCutPlan(list, L);
-  const n1220 = sheets.filter(s=>!s.red).length, n1500 = sheets.filter(s=>s.red).length;
+  const widths = currentWidths(), maxW = widths[widths.length - 1];
   // КИМ — коэффициент использования материала: площадь деталей / площадь листа.
   const usedArea = sheet => sheet.shelves.reduce((s, sh)=> s + sh.items.reduce((a, it)=> a + it.pw * it.ph, 0), 0);
   const kimPct = (used, total)=> total > 0 ? Math.round(used / total * 100) : 0;
   const totalUsed = sheets.reduce((s, sh)=> s + usedArea(sh), 0);
   const totalArea = sheets.reduce((s, sh)=> s + sh.Wsheet * sh.L, 0);
   const kimAll = kimPct(totalUsed, totalArea);
-  info.textContent = `Листов: ${sheets.length} (1220×${dim(L)}: ${n1220}` + (n1500 ? `, 1500×${dim(L)}: ${n1500}` : '')
-    + `) · КИМ ${kimAll}% (использование листа) · нажмите на лист, чтобы увеличить`;
+  // разбивка по ширинам: «1220×4000: 2, 1500×4000: 1»
+  const byWidth = widths.map(w=>({ w, n: sheets.filter(s=> s.Wsheet === w).length })).filter(x=> x.n);
+  const breakdown = byWidth.map(x=> `${x.w}×${dim(L)}: ${x.n}`).join(', ');
+  info.textContent = `Листов: ${sheets.length}` + (breakdown ? ` (${breakdown})` : '')
+    + ` · КИМ ${kimAll}% (использование листа) · нажмите на лист, чтобы увеличить`;
   if(oversize.length){
     over.style.display = 'block';
-    over.innerHTML = `<div>⚠ Не помещается ни на 1220, ни на 1500: ${oversize.length} шт. (шире ${dim(SHEET_W2)} или выше ${dim(L)}).</div>`;
+    over.innerHTML = `<div>⚠ Не помещается на лист: ${oversize.length} шт. (шире ${dim(maxW)} или выше ${dim(L)}).</div>`;
   }
-  const scale = Math.min(150 / SHEET_W2, 430 / L);   // общий масштаб миниатюр
+  const scale = Math.min(150 / maxW, 430 / L);   // общий масштаб миниатюр
   sheets.forEach((sheet, si)=>{
-    const title = `Лист ${sheet.Wsheet}×${dim(L)} · КИМ ${kimPct(usedArea(sheet), sheet.Wsheet * sheet.L)}%` + (sheet.red ? ' (не влез на 1220)' : '');
+    const title = `Лист ${sheet.Wsheet}×${dim(L)} · КИМ ${kimPct(usedArea(sheet), sheet.Wsheet * sheet.L)}%` + (sheet.red ? ' (шире мин.)' : '');
     const wrap = document.createElement('div');
     wrap.style.flex = '0 0 auto'; wrap.style.textAlign = 'center'; wrap.style.cursor = 'zoom-in';
     wrap.title = 'Нажмите, чтобы увеличить';
@@ -567,9 +597,8 @@ function collectCutPlanPrimitives(){
         }
       });
     });
-    const lbl = `${sheet.Wsheet}x${Math.round(sheet.L)}` + (sheet.red ? ' (>1220)' : '');
     texts.push({ layer: 'LABEL', x: ox + sheet.Wsheet / 2, y: sheet.L + EXPORT_LABEL_H * 1.1, h: EXPORT_LABEL_H,
-                 dxf: `Sheet ${si + 1} ${lbl}`, svg: `Лист ${si + 1} · ${sheet.Wsheet}×${Math.round(sheet.L)}` + (sheet.red ? ' (не влез на 1220)' : '') });
+                 dxf: `Sheet ${si + 1} ${sheet.Wsheet}x${Math.round(sheet.L)}`, svg: `Лист ${si + 1} · ${sheet.Wsheet}×${Math.round(sheet.L)}` });
     ox += sheet.Wsheet + EXPORT_GAP;
   });
   const totalW = Math.max(0, ox - EXPORT_GAP);
@@ -816,6 +845,7 @@ on($('#btnExportDXF'),'click', e=>{ e.preventDefault(); exportCutPlan('dxf'); })
 on($('#btnExportSVG'),'click', e=>{ e.preventDefault(); exportCutPlan('svg'); });
 on($('#cutKerf'),'input', e=>{ cutKerf = Math.max(0, parseNum(e.target.value)); try{ localStorage.setItem(TAPE_KERF_KEY, String(cutKerf)); }catch(err){} renderCutPlan(); });
 on($('#cutRotate'),'change', e=>{ allowRotate = !!e.target.checked; try{ localStorage.setItem(TAPE_ROTATE_KEY, allowRotate ? '1' : '0'); }catch(err){} renderCutPlan(); });
+on($('#cutStandard'),'change', e=>{ sheetStandard = e.target.value; try{ localStorage.setItem(TAPE_STD_KEY, sheetStandard); }catch(err){} renderCutPlan(); });
 
 try{ const sv = localStorage.getItem(TAPE_SHEET_KEY); if(sv != null) $('#tapeSheet').value = sv; }catch(e){}
 try{ const hs = localStorage.getItem(TAPE_HSTD_KEY); if(hs != null) $('#tapeHeightStd').value = hs; }catch(e){}
@@ -825,6 +855,10 @@ try{ const cu = localStorage.getItem(TAPE_CUTSUNIT_KEY); if(cu==='m'||cu==='cm'|
 try{ const su = localStorage.getItem(TAPE_SHEET_UNIT_KEY); if(su==='m'||su==='cm'||su==='mm') sheetUnit = su; }catch(e){}
 try{ const kf = localStorage.getItem(TAPE_KERF_KEY); if(kf != null && Number.isFinite(Number(kf))){ cutKerf = Math.max(0, Number(kf)); $('#cutKerf').value = kf; } }catch(e){}
 try{ const rt = localStorage.getItem(TAPE_ROTATE_KEY); if(rt === '0' || rt === '1'){ allowRotate = rt === '1'; $('#cutRotate').checked = allowRotate; } }catch(e){}
+try{ const sd = localStorage.getItem(TAPE_STD_KEY); if(sd && SHEET_STANDARDS.some(x=> x.id === sd)) sheetStandard = sd; }catch(e){}
+// заполняем список стандартов и отмечаем выбранный
+$('#cutStandard').innerHTML = SHEET_STANDARDS.map(s=> `<option value="${s.id}">${escapeHtml(s.label)}</option>`).join('');
+$('#cutStandard').value = sheetStandard;
 $('#tapeSheetUnitToggle').textContent = unitLabel(sheetUnit);
 try{ const ghu = localStorage.getItem(TAPE_GROUPH_UNIT_KEY); if(ghu==='m'||ghu==='cm'||ghu==='mm'){ $('#tapeGroupHUnit').value = ghu; groupHUnitPrev = ghu; } }catch(e){}
 tapeEntries = loadTapeArray(TAPE_KEY);
