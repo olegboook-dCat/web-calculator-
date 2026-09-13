@@ -73,6 +73,11 @@ input.over-height{outline:2px solid #a855f7;background:#1e1233;color:#e9d5ff}
 }
 .cut-block.just-copied{animation:cutCopyIn .55s ease-out}
 @media (prefers-reduced-motion: reduce){ .cut-block.just-copied{animation:none} }
+/* тизер платных функций (простые страницы → полные версии) */
+.simple-teaser{border:1px dashed #334155;background:#0b1221;border-radius:12px;padding:12px 14px;margin-top:14px}
+.simple-teaser .t-list{margin:6px 0 10px;color:#cbd5e1}
+.simple-teaser .t-list li{margin:2px 0}
+.simple-teaser .lock{opacity:.75}
 .knauf-only{display:none}
 body.knauf-mode .knauf-only{display:block}
 body.knauf-mode .grid-2.knauf-only,body.knauf-mode .grid-3.knauf-only{display:grid}
