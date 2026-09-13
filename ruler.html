@@ -59,9 +59,10 @@
               <span class="muted small">Высота:</span><input type="text" id="jointH" inputmode="decimal" placeholder="мм" style="max-width:70px">
               <span class="muted small">Угол:</span><input type="text" id="jointDeg" inputmode="decimal" value="45" style="max-width:52px"><span class="muted small">° по</span>
               <button class="btn ghost small" id="jointMode" style="padding:4px 10px" title="Угол: реза кромки или готового поворота">кромке</button>
+              <button class="btn ghost small" id="jointAxis" style="padding:4px 10px" title="Куда идёт наклонная: во всю высоту (боковая сторона) или во всю ширину (верхняя/нижняя)">⇕ во всю высоту</button>
               <button class="btn" id="jointAdd">Создать стык</button>
             </div>
-            <div class="muted small" style="margin-top:4px">Создаст две панели (A×H и B×H) с реальным диагональным резом кромок — стыкуются встык в одной плоскости (Г-панель). Контур идёт в раскрой и экспорт. Размеры в мм.</div>
+            <div class="muted small" style="margin-top:4px">Создаст две панели (A×H и B×H) с реальным диагональным резом кромок — стыкуются встык в одной плоскости (Г-панель). Наклонная идёт во всю высоту или во всю ширину. Контур идёт в раскрой и экспорт. Размеры в мм.</div>
           </details>
           <div class="table-scroll">
           <table id="tapeTbl">
@@ -178,7 +179,7 @@ function loadTapeArray(key){
 function saveTapeEntries(){ try{ localStorage.setItem(TAPE_KEY, JSON.stringify(tapeEntries)); }catch(e){} }
 // Сохраняем только {name, items}; служебный флаг раскрытия (_open) не пишем,
 // чтобы после перезагрузки история была свёрнута по умолчанию.
-function saveTapeCuts(){ try{ localStorage.setItem(TAPE_CUTS_KEY, JSON.stringify(tapeCuts.map(c=>({name:c.name||'', items:c.items, height:c.height||0, hItems:Array.isArray(c.hItems)?c.hItems:[], angEdge:normalizeAngEdge(c.angEdge), angDeg:Math.max(0,parseNum(c.angDeg)), angCorner:(c.angCorner==='bottom'?'bottom':'top'), angMode:(c.angMode==='corner'?'corner':'edge')})))); }catch(e){} }
+function saveTapeCuts(){ try{ localStorage.setItem(TAPE_CUTS_KEY, JSON.stringify(tapeCuts.map(c=>({name:c.name||'', items:c.items, height:c.height||0, hItems:Array.isArray(c.hItems)?c.hItems:[], angEdge:normalizeAngEdge(c.angEdge), angDeg:Math.max(0,parseNum(c.angDeg)), angCorner:(c.angCorner==='bottom'?'bottom':'top'), angMode:(c.angMode==='corner'?'corner':'edge'), angAxis:(c.angAxis==='width'?'width':'height'), angW2:Math.max(0,parseNum(c.angW2))})))); }catch(e){} }
 function formatTapeNumber(n){ return String(Math.round(n*1000)/1000); }
 
 function tapeGroupSum(){ return tapeEntries.reduce((s,v)=> s + parseNum(v), 0); }
@@ -205,13 +206,17 @@ function normalizeAngEdge(v){ return (v === 'left' || v === 'right' || v === 'bo
 // диагонали от вертикальной кромки. angMode ('edge'/'corner') — только для UI.
 function cutAng(cut){
   return { edge: normalizeAngEdge(cut && cut.angEdge), deg: Math.max(0, parseNum(cut && cut.angDeg)),
-           corner: (cut && cut.angCorner === 'bottom') ? 'bottom' : 'top' };
+           corner: (cut && cut.angCorner === 'bottom') ? 'bottom' : 'top',
+           axis: (cut && cut.angAxis === 'width') ? 'width' : 'height',
+           w2: Math.max(0, parseNum(cut && cut.angW2)) };
 }
 function normalizeCut(el){
   const hi = (el && Array.isArray(el.hItems)) ? el.hItems.map(x=>parseNum(x)) : [];
   const ang = { angEdge: normalizeAngEdge(el && el.angEdge), angDeg: Math.max(0, parseNum(el && el.angDeg)),
                 angCorner: (el && el.angCorner === 'bottom') ? 'bottom' : 'top',
-                angMode: (el && el.angMode === 'corner') ? 'corner' : 'edge' };
+                angMode: (el && el.angMode === 'corner') ? 'corner' : 'edge',
+                angAxis: (el && el.angAxis === 'width') ? 'width' : 'height',
+                angW2: Math.max(0, parseNum(el && el.angW2)) };
   if(el && Array.isArray(el.items)) return Object.assign({ name: String(el.name || ''), items: el.items.map(x=>parseNum(x)), height: parseNum(el.height), hItems: hi }, ang);
   if(el && typeof el === 'object' && 'value' in el) return Object.assign({ name: String(el.name || ''), items: [parseNum(el.value)], height: parseNum(el.height), hItems: hi }, ang);
   return Object.assign({ name: '', items: [parseNum(el)], height: 0, hItems: hi }, ang);
@@ -269,24 +274,69 @@ function foldLines(px, py, pw, ph, wItems, hItems, rot, scale){
   addAxis(hItems, false);
   return out;
 }
-// --- Стык в плоскости: диагональный рез кромки -------------------------------
-// ang = {edge:'none'|'left'|'right'|'both', deg:угол от вертикальной кромки,
-// corner:'top'|'bottom'}. Возвращает контур панели как список точек {x,y}
-// (мм, локально W×H, Y вниз). Без реза — прямоугольник (4 угла).
-function angRun(H, deg){ const d = Math.max(0, Math.min(89, deg || 0)); return H * Math.tan(d * Math.PI / 180); }
+// --- Стык в плоскости: диагональный рез кромки / трапеция ---------------------
+// ang = {edge:'none'|'left'|'right'|'both', deg:угол наклонной от опорной кромки,
+// corner:'top'|'bottom', axis:'height'|'width', w2:второй размер, мм}.
+// Возвращает контур панели как список точек {x,y} (мм, локально W×H, Y вниз).
+// Без реза — прямоугольник (4 угла).
+//   axis='height' — наклон идёт по боковой стороне во всю ВЫСОТУ (лист сужается
+//     по ширине сверху/снизу); w2 — вторая ШИРИНА.
+//   axis='width'  — наклон идёт по верхней/нижней стороне во всю ШИРИНУ (лист
+//     меняет высоту слева/справа); w2 — вторая ВЫСОТА.
+// Если задан w2 (>0) — величина скоса берётся из разницы размеров (угол
+// считается сам); иначе — из угла deg.
+const RECT = (W, H)=> [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: H }, { x: 0, y: H }];
+function angRun(len, deg){ const d = Math.max(0, Math.min(89, deg || 0)); return len * Math.tan(d * Math.PI / 180); }
+// Наклон по боковой стороне (во всю высоту): сдвигаем верхние или нижние углы
+// по X на run с левой и/или правой стороны.
+function slantSides(W, H, edge, corner, run){
+  const top = corner !== 'bottom';                     // 'top' по умолчанию
+  const L = edge === 'left' || edge === 'both';
+  const R = edge === 'right' || edge === 'both';
+  return [
+    (L && !top) ? { x: run, y: 0 }     : { x: 0, y: 0 },       // left+bottom срезает TL
+    (R && !top) ? { x: W - run, y: 0 } : { x: W, y: 0 },       // right+bottom срезает TR
+    (R && top)  ? { x: W - run, y: H } : { x: W, y: H },       // right+top срезает BR
+    (L && top)  ? { x: run, y: H }     : { x: 0, y: H },       // left+top срезает BL
+  ];
+}
+// Наклон по верхней/нижней стороне (во всю ширину): сдвигаем углы верхней
+// (corner='top') или нижней (corner='bottom') кромки по Y на run с левого и/или
+// правого края.
+function slantTops(W, H, edge, corner, run){
+  const atTop = corner !== 'bottom';                   // 'top' по умолчанию → наклон сверху
+  const L = edge === 'left' || edge === 'both';
+  const R = edge === 'right' || edge === 'both';
+  return [
+    (L && atTop)  ? { x: 0, y: run }     : { x: 0, y: 0 },     // верхний-левый опускается
+    (R && atTop)  ? { x: W, y: run }     : { x: W, y: 0 },     // верхний-правый опускается
+    (R && !atTop) ? { x: W, y: H - run } : { x: W, y: H },     // нижний-правый поднимается
+    (L && !atTop) ? { x: 0, y: H - run } : { x: 0, y: H },     // нижний-левый поднимается
+  ];
+}
 function panelOutline(W, H, ang){
   ang = ang || {};
-  if((ang.edge || 'none') === 'none' || !(ang.deg > 0))
-    return [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: H }, { x: 0, y: H }];
-  const run = Math.min(W, angRun(H, ang.deg));
-  const top = ang.corner !== 'bottom';                 // 'top' по умолчанию
-  const L = ang.edge === 'left' || ang.edge === 'both';
-  const R = ang.edge === 'right' || ang.edge === 'both';
-  const tl = (L && !top) ? { x: run, y: 0 } : { x: 0, y: 0 };       // left+bottom срезает TL
-  const tr = (R && !top) ? { x: W - run, y: 0 } : { x: W, y: 0 };   // right+bottom срезает TR
-  const br = (R && top)  ? { x: W - run, y: H } : { x: W, y: H };   // right+top срезает BR
-  const bl = (L && top)  ? { x: run, y: H } : { x: 0, y: H };       // left+top срезает BL
-  return [tl, tr, br, bl];
+  const edge = normalizeAngEdge(ang.edge);
+  if(edge === 'none') return RECT(W, H);
+  const axis = ang.axis === 'width' ? 'width' : 'height';
+  const perp = axis === 'width' ? H : W;               // размер параллельной кромки (с чем сравниваем w2)
+  const refLen = axis === 'width' ? W : H;             // размер, вдоль которого идёт наклонная
+  const w2 = Math.max(0, parseNum(ang.w2));
+  let run = w2 > 0 ? Math.abs(perp - w2) : angRun(refLen, ang.deg);
+  run = Math.min(perp, Math.max(0, run));
+  if(!(run > 0)) return RECT(W, H);
+  const corner = ang.corner === 'bottom' ? 'bottom' : 'top';
+  return axis === 'width' ? slantTops(W, H, edge, corner, run) : slantSides(W, H, edge, corner, run);
+}
+// Угол наклонной кромки (в градусах от опорной кромки) по текущим размерам —
+// для показа авто-угла, когда задан второй размер (w2).
+function angAutoDeg(W, H, ang){
+  const axis = (ang && ang.axis === 'width') ? 'width' : 'height';
+  const perp = axis === 'width' ? H : W;
+  const refLen = axis === 'width' ? W : H;
+  const w2 = Math.max(0, parseNum(ang && ang.w2));
+  const run = Math.min(perp, Math.abs(perp - w2));
+  return refLen > 0 ? Math.atan2(run, refLen) * 180 / Math.PI : 0;
 }
 // Точка панели (локальные W×H, Y вниз) → координаты на листе (px/py, масштаб s),
 // с учётом поворота (при rot ширина идёт по вертикали).
@@ -824,6 +874,8 @@ function renderTapeCuts(){
     cut.angEdge = normalizeAngEdge(cut.angEdge); cut.angDeg = Math.max(0, parseNum(cut.angDeg));
     cut.angCorner = cut.angCorner === 'bottom' ? 'bottom' : 'top';
     cut.angMode = cut.angMode === 'corner' ? 'corner' : 'edge';
+    cut.angAxis = cut.angAxis === 'width' ? 'width' : 'height';
+    cut.angW2 = Math.max(0, parseNum(cut.angW2));
     const block = document.createElement('div'); block.className = 'cut-block';
 
     // --- шапка: №, название (если задано), сумма, переключатель истории, удалить ---
@@ -933,25 +985,55 @@ function renderTapeCuts(){
     block.appendChild(hitems);
     hToggle.addEventListener('click', e=>{ e.preventDefault(); cut._hopen = !cut._hopen; hitems.style.display = cut._hopen ? 'flex' : 'none'; setHToggle(); });
 
-    // --- параметры диагонального реза (стык в плоскости), если рез включён ---
+    // --- параметры диагонального реза / трапеции (стык в плоскости) ----------
     if(cut.angEdge !== 'none'){
       const angRow = document.createElement('div'); angRow.className = 'cut-items';
-      angRow.style.display = 'flex'; angRow.style.gap = '6px'; angRow.style.alignItems = 'center';
-      const shown = cut.angMode === 'corner' ? cut.angDeg * 2 : cut.angDeg;
-      angRow.innerHTML = `<span class="muted small">рез:</span>`;
-      const angInp = document.createElement('input'); angInp.type = 'text'; angInp.inputMode = 'decimal';
-      angInp.value = formatTapeNumber(shown); angInp.style.width = '56px'; angInp.title = 'Угол в градусах';
-      angRow.appendChild(angInp);
-      const degS = document.createElement('span'); degS.className = 'muted small'; degS.textContent = '°'; angRow.appendChild(degS);
+      angRow.style.display = 'flex'; angRow.style.gap = '6px'; angRow.style.alignItems = 'center'; angRow.style.flexWrap = 'wrap';
+
+      // ось наклона: во всю высоту (боковая сторона) / во всю ширину (верхняя/нижняя)
+      const axisBtn = document.createElement('button'); axisBtn.type = 'button'; axisBtn.className = 'btn ghost small'; axisBtn.style.padding = '2px 8px';
+      axisBtn.textContent = cut.angAxis === 'width' ? '⇔ во всю ширину' : '⇕ во всю высоту';
+      axisBtn.title = 'Куда идёт наклонная: по боковой стороне (во всю высоту) или по верхней/нижней (во всю ширину)';
+      axisBtn.style.color = '#38bdf8';
+      angRow.appendChild(axisBtn);
+
+      // второй размер (2-я ширина / 2-я высота) — задаёт скос размером, угол сам
+      const w2Lbl = document.createElement('span'); w2Lbl.className = 'muted small';
+      w2Lbl.textContent = cut.angAxis === 'width' ? '2-я выс:' : '2-я шир:';
+      angRow.appendChild(w2Lbl);
+      const w2Inp = document.createElement('input'); w2Inp.type = 'text'; w2Inp.inputMode = 'decimal'; w2Inp.style.width = '64px'; w2Inp.placeholder = 'мм';
+      w2Inp.title = 'Второй размер листа (противоположная кромка). Пусто — задать углом.';
+      if(cut.angW2 > 0) w2Inp.value = formatTapeNumber(cut.angW2 / unitFactor(sheetUnit));
+      angRow.appendChild(w2Inp);
+
+      // угол наклонной: редактируется, если второй размер не задан; иначе показ авто-угла
+      const angSpan = document.createElement('span'); angSpan.className = 'muted small'; angSpan.textContent = 'рез:'; angRow.appendChild(angSpan);
+      const angInp = document.createElement('input'); angInp.type = 'text'; angInp.inputMode = 'decimal'; angInp.style.width = '56px';
+      const degS = document.createElement('span'); degS.className = 'muted small'; degS.textContent = '°';
       const modeBtn = document.createElement('button'); modeBtn.type = 'button'; modeBtn.className = 'btn ghost small'; modeBtn.style.padding = '2px 8px';
       modeBtn.textContent = cut.angMode === 'corner' ? 'поворота' : 'кромки';
       modeBtn.title = 'Что означает угол: реза кромки или готового поворота панели';
-      angRow.appendChild(modeBtn);
+      const showAngle = ()=>{
+        const auto = angAutoDeg(cutSum(cut), cutHeightMm(cut), cutAng(cut));
+        const base = cut.angW2 > 0 ? auto : cut.angDeg;
+        angInp.value = formatTapeNumber(cut.angMode === 'corner' ? base * 2 : base);
+        angInp.readOnly = cut.angW2 > 0;
+        angInp.style.opacity = cut.angW2 > 0 ? '0.7' : '';
+        angInp.title = cut.angW2 > 0 ? 'Угол считается сам из размеров' : 'Угол наклонной в градусах';
+      };
+      showAngle();
+      angRow.appendChild(angInp); angRow.appendChild(degS); angRow.appendChild(modeBtn);
+
       const cornBtn = document.createElement('button'); cornBtn.type = 'button'; cornBtn.className = 'btn ghost small'; cornBtn.style.padding = '2px 8px';
-      cornBtn.textContent = cut.angCorner === 'bottom' ? 'от низа' : 'от верха';
-      cornBtn.title = 'От какого угла кромки идёт диагональ';
+      cornBtn.textContent = cut.angAxis === 'width'
+        ? (cut.angCorner === 'bottom' ? 'снизу' : 'сверху')
+        : (cut.angCorner === 'bottom' ? 'от низа' : 'от верха');
+      cornBtn.title = 'С какой стороны идёт наклонная';
       angRow.appendChild(cornBtn);
-      on(angInp, 'input', e=>{ const v = Math.max(0, parseNum(e.target.value)); cut.angDeg = cut.angMode === 'corner' ? v / 2 : v; saveTapeCuts(); updateTapeTotals(); });
+
+      axisBtn.addEventListener('click', e=>{ e.preventDefault(); cut.angAxis = cut.angAxis === 'width' ? 'height' : 'width'; saveTapeCuts(); renderTapeCuts(); });
+      on(w2Inp, 'input', e=>{ cut.angW2 = Math.max(0, parseNum(e.target.value) * unitFactor(sheetUnit)); showAngle(); saveTapeCuts(); updateTapeTotals(); });
+      on(angInp, 'input', e=>{ if(cut.angW2 > 0) return; const v = Math.max(0, parseNum(e.target.value)); cut.angDeg = cut.angMode === 'corner' ? v / 2 : v; saveTapeCuts(); updateTapeTotals(); });
       modeBtn.addEventListener('click', e=>{ e.preventDefault(); cut.angMode = cut.angMode === 'corner' ? 'edge' : 'corner'; saveTapeCuts(); renderTapeCuts(); });
       cornBtn.addEventListener('click', e=>{ e.preventDefault(); cut.angCorner = cut.angCorner === 'bottom' ? 'top' : 'bottom'; saveTapeCuts(); renderTapeCuts(); });
       block.appendChild(angRow);
@@ -982,6 +1064,7 @@ function cutTape(){
 }
 // Стык в плоскости: две панели с диагональным резом кромок (A — правая, B — левая).
 let jointMode = 'edge';   // 'edge' (угол реза кромки) | 'corner' (угол поворота)
+let jointAxis = 'height'; // 'height' (во всю высоту) | 'width' (во всю ширину)
 function addPlaneJoint(){
   const A = parseNum($('#jointA').value), B = parseNum($('#jointB').value), H = parseNum($('#jointH').value);
   const raw = Math.max(0, parseNum($('#jointDeg').value));
@@ -989,8 +1072,8 @@ function addPlaneJoint(){
   if(!(A > 0) || !(B > 0) || !(H > 0) || !(edgeDeg > 0) || edgeDeg >= 90){
     $(A > 0 ? (B > 0 ? (H > 0 ? '#jointDeg' : '#jointH') : '#jointB') : '#jointA').focus(); return;
   }
-  tapeCuts.push({ name: 'Стык A', items: [A], height: H, hItems: [], angEdge: 'right', angDeg: edgeDeg, angCorner: 'top', angMode: jointMode });
-  tapeCuts.push({ name: 'Стык B', items: [B], height: H, hItems: [], angEdge: 'left', angDeg: edgeDeg, angCorner: 'top', angMode: jointMode });
+  tapeCuts.push({ name: 'Стык A', items: [A], height: H, hItems: [], angEdge: 'right', angDeg: edgeDeg, angCorner: 'top', angMode: jointMode, angAxis: jointAxis, angW2: 0 });
+  tapeCuts.push({ name: 'Стык B', items: [B], height: H, hItems: [], angEdge: 'left', angDeg: edgeDeg, angCorner: 'top', angMode: jointMode, angAxis: jointAxis, angW2: 0 });
   saveTapeCuts(); renderTapeCuts();
   $('#jointA').value = ''; $('#jointB').value = ''; $('#jointH').value = '';
   $('#jointA').focus();
@@ -1036,6 +1119,7 @@ on($('#tapeAdd'),'click', e=>{ e.preventDefault(); addTapeEntry(); });
 on($('#tapeCut'),'click', e=>{ e.preventDefault(); cutTape(); });
 on($('#jointAdd'),'click', e=>{ e.preventDefault(); addPlaneJoint(); });
 on($('#jointMode'),'click', e=>{ e.preventDefault(); jointMode = jointMode === 'corner' ? 'edge' : 'corner'; $('#jointMode').textContent = jointMode === 'corner' ? 'повороту' : 'кромке'; });
+on($('#jointAxis'),'click', e=>{ e.preventDefault(); jointAxis = jointAxis === 'width' ? 'height' : 'width'; $('#jointAxis').textContent = jointAxis === 'width' ? '⇔ во всю ширину' : '⇕ во всю высоту'; });
 on($('#tapeClear'),'click', e=>{ e.preventDefault(); clearTape(); });
 on($('#tapeInput'),'keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addTapeEntry(); } });
 on($('#tapeSheet'),'input', e=>{ saveTapeSheet(); updateTapeTotals(); renderTapeCuts(); });
