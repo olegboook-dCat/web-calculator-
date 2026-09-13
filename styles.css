@@ -53,6 +53,11 @@ input.over-height{outline:2px solid #a855f7;background:#1e1233;color:#e9d5ff}
 .cut-h-wrap input{width:72px}
 .cut-h-wrap .muted{white-space:nowrap}
 .cut-area{white-space:nowrap;color:#cbd5e1;font-size:15px}
+/* кнопки удаления: значок корзины, приглушённо-красные, отделены справа */
+.cut-del{margin-left:6px;color:#f87171;border-color:#7f1d1d;line-height:1}
+.cut-del:hover{background:#6e2230;border-color:#b91c1c;color:#fecaca}
+.del-x{color:#f87171;padding:2px 7px;line-height:1}
+.del-x:hover{background:#6e2230;border-color:#b91c1c;color:#fecaca}
 .knauf-only{display:none}
 body.knauf-mode .knauf-only{display:block}
 body.knauf-mode .grid-2.knauf-only,body.knauf-mode .grid-3.knauf-only{display:grid}

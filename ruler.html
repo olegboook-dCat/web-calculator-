@@ -859,7 +859,7 @@ function renderTape(){
     tr.innerHTML = `
       <td>${idx+1}</td>
       <td><input type="text" inputmode="decimal" value="${formatTapeNumber(val / unitFactor(sheetUnit))}"></td>
-      <td><button class="btn ghost">✕</button></td>`;
+      <td><button class="btn ghost del-x" title="Удалить">🗑</button></td>`;
     on(tr.querySelector('input'),'input', e=>{ tapeEntries[idx] = parseNum(e.target.value) * unitFactor(sheetUnit); updateTapeTotals(); saveTapeEntries(); });
     tr.querySelector('button').addEventListener('click', e=>{ e.preventDefault(); tapeEntries.splice(idx,1); saveTapeEntries(); renderTape(); });
     body.appendChild(tr);
@@ -918,8 +918,11 @@ function renderTapeCuts(){
     const setAngBtn = ()=>{ angBtn.textContent = ANG_LABEL[cut.angEdge]; angBtn.style.color = cut.angEdge === 'none' ? '' : '#38bdf8'; };
     setAngBtn();
     angBtn.addEventListener('click', e=>{ e.preventDefault(); const o = ['none','left','right','both']; cut.angEdge = o[(o.indexOf(cut.angEdge) + 1) % 4]; if(cut.angEdge !== 'none' && !(cut.angDeg > 0)) cut.angDeg = 45; saveTapeCuts(); renderTapeCuts(); });
-    const del = document.createElement('button'); del.type = 'button'; del.className = 'btn ghost'; del.textContent = '✕';
-    del.addEventListener('click', e=>{ e.preventDefault(); tapeCuts.splice(ci, 1); saveTapeCuts(); renderTapeCuts(); });
+    const del = document.createElement('button'); del.type = 'button'; del.className = 'btn ghost cut-del'; del.textContent = '🗑'; del.title = 'Удалить отсечку';
+    del.addEventListener('click', e=>{ e.preventDefault();
+      const label = cut.name ? '«' + cut.name + '»' : ('№' + (ci + 1));
+      if(!window.confirm('Удалить отсечку ' + label + '? Действие нельзя отменить.')) return;
+      tapeCuts.splice(ci, 1); saveTapeCuts(); renderTapeCuts(); });
 
     // клик по номеру или названию → инлайн-поле ввода названия
     const startNameEdit = ()=>{
@@ -945,14 +948,14 @@ function renderTapeCuts(){
     nameView.addEventListener('click', e=>{ e.preventDefault(); startNameEdit(); });
 
     const spacer = document.createElement('span'); spacer.style.flex = '1';
-    head.appendChild(noBtn); head.appendChild(areaEl); head.appendChild(nameView); head.appendChild(spacer); head.appendChild(sumEl); head.appendChild(hWrap); head.appendChild(toggle); head.appendChild(hToggle); head.appendChild(angBtn); head.appendChild(del);
+    head.appendChild(noBtn); head.appendChild(areaEl); head.appendChild(nameView); head.appendChild(spacer); head.appendChild(sumEl); head.appendChild(del); head.appendChild(hWrap); head.appendChild(toggle); head.appendChild(hToggle); head.appendChild(angBtn);
     block.appendChild(head);
 
     // --- история чисел (свёрнута по умолчанию), каждое со своим номером ---
     const items = document.createElement('div'); items.className = 'cut-items'; items.style.display = cut._open ? 'flex' : 'none';
     cut.items.forEach((val, ii)=>{
       const item = document.createElement('span'); item.className = 'item';
-      item.innerHTML = `<span class="item-no">${ii + 1}.</span><input type="text" inputmode="decimal" value="${formatTapeNumber(val / unitFactor(sheetUnit))}"><button class="btn ghost">✕</button>`;
+      item.innerHTML = `<span class="item-no">${ii + 1}.</span><input type="text" inputmode="decimal" value="${formatTapeNumber(val / unitFactor(sheetUnit))}"><button class="btn ghost del-x" title="Удалить">🗑</button>`;
       on(item.querySelector('input'),'input', e=>{ cut.items[ii] = parseNum(e.target.value) * unitFactor(sheetUnit); const cs = cutSum(cut); sumEl.textContent = formatTapeNumber(cs / unitFactor(sheetUnit)); sumEl.classList.toggle('near-limit', nearLimit(cs)); setArea(); updateTapeTotals(); saveTapeCuts(); });
       item.querySelector('button').addEventListener('click', e=>{ e.preventDefault(); cut.items.splice(ii, 1); saveTapeCuts(); renderTapeCuts(); });
       items.appendChild(item);
@@ -974,7 +977,7 @@ function renderTapeCuts(){
     };
     cut.hItems.forEach((val, ii)=>{
       const item = document.createElement('span'); item.className = 'item';
-      item.innerHTML = `<span class="item-no">${ii + 1}.</span><input type="text" inputmode="decimal" placeholder="мм" value="${formatTapeNumber(parseNum(val))}"><button class="btn ghost">✕</button>`;
+      item.innerHTML = `<span class="item-no">${ii + 1}.</span><input type="text" inputmode="decimal" placeholder="мм" value="${formatTapeNumber(parseNum(val))}"><button class="btn ghost del-x" title="Удалить">🗑</button>`;
       on(item.querySelector('input'),'input', e=>{ cut.hItems[ii] = parseNum(e.target.value); refreshH(); });
       item.querySelector('button').addEventListener('click', e=>{ e.preventDefault(); cut.hItems.splice(ii, 1); saveTapeCuts(); renderTapeCuts(); });
       hitems.appendChild(item);
