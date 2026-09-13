@@ -916,6 +916,7 @@ function renderTapeCuts(){
     cut.angAxis = cut.angAxis === 'width' ? 'width' : 'height';
     cut.angW2 = Math.max(0, parseNum(cut.angW2));
     const block = document.createElement('div'); block.className = 'cut-block'; block.dataset.idx = ci;
+    if(cut._justCopied){ block.classList.add('just-copied'); delete cut._justCopied; }  // анимация появления копии
 
     // --- шапка: №, название (если задано), сумма, переключатель истории, удалить ---
     const head = document.createElement('div'); head.className = 'cut-head';
@@ -928,6 +929,7 @@ function renderTapeCuts(){
     copyBtn.textContent = '⧉ копия'; copyBtn.title = 'Скопировать отсечку (копия встанет ниже)';
     copyBtn.addEventListener('click', e=>{ e.preventDefault();
       const clone = JSON.parse(JSON.stringify(cut));
+      clone._justCopied = true;                       // подсветим копию анимацией
       tapeCuts.splice(ci + 1, 0, clone); saveTapeCuts(); renderTapeCuts(); });
     const noBtn = document.createElement('button');
     noBtn.type = 'button'; noBtn.className = 'cut-no'; noBtn.textContent = '№' + (ci + 1);

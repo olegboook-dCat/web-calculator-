@@ -65,6 +65,14 @@ input.over-height{outline:2px solid #a855f7;background:#1e1233;color:#e9d5ff}
 .cut-block.dragging{opacity:.55;outline:2px dashed var(--pri);outline-offset:2px}
 .cut-copy{color:#93c5fd;line-height:1}
 .cut-copy:hover{background:#12233b;border-color:#3b82f6;color:#dbeafe}
+/* лёгкая анимация появления скопированной отсечки */
+@keyframes cutCopyIn{
+  0%{opacity:.25;transform:translateY(-8px);background:#12233b;border-color:#3b82f6}
+  60%{background:#12233b;border-color:#3b82f6}
+  100%{opacity:1;transform:none;background:#0b1221;border-color:#1f2937}
+}
+.cut-block.just-copied{animation:cutCopyIn .55s ease-out}
+@media (prefers-reduced-motion: reduce){ .cut-block.just-copied{animation:none} }
 .knauf-only{display:none}
 body.knauf-mode .knauf-only{display:block}
 body.knauf-mode .grid-2.knauf-only,body.knauf-mode .grid-3.knauf-only{display:grid}
