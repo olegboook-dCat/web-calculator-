@@ -51,6 +51,16 @@
           <div class="actions" style="margin-top:8px">
             <button class="btn" id="tapeCut" style="flex:1;justify-content:center;background:#6e2230;border-color:#7f1d1d;color:#fecaca">✂ Отсечь</button>
           </div>
+          <details style="margin-top:8px">
+            <summary class="muted small" style="cursor:pointer">⌐ Угол 90° из двух листов (отпил 45°)</summary>
+            <div class="actions" style="margin-top:8px;align-items:center;flex-wrap:wrap;gap:6px">
+              <span class="muted small">Сторона A:</span><input type="text" id="cornerA" inputmode="decimal" placeholder="мм" style="max-width:80px">
+              <span class="muted small">Сторона B:</span><input type="text" id="cornerB" inputmode="decimal" placeholder="мм" style="max-width:80px">
+              <span class="muted small">Высота:</span><input type="text" id="cornerH" inputmode="decimal" placeholder="мм" style="max-width:80px">
+              <button class="btn" id="cornerAdd">Создать угол</button>
+            </div>
+            <div class="muted small" style="margin-top:4px">Создаст две панели (A×H и B×H); стыковые кромки помечаются «отпил 45°» — по ним стык «на ус» даёт наружный угол 90°. Размеры в мм.</div>
+          </details>
           <div class="table-scroll">
           <table id="tapeTbl">
             <thead><tr><th>#</th><th>Значение (текущая группа)</th><th></th></tr></thead>
@@ -166,7 +176,7 @@ function loadTapeArray(key){
 function saveTapeEntries(){ try{ localStorage.setItem(TAPE_KEY, JSON.stringify(tapeEntries)); }catch(e){} }
 // Сохраняем только {name, items}; служебный флаг раскрытия (_open) не пишем,
 // чтобы после перезагрузки история была свёрнута по умолчанию.
-function saveTapeCuts(){ try{ localStorage.setItem(TAPE_CUTS_KEY, JSON.stringify(tapeCuts.map(c=>({name:c.name||'', items:c.items, height:c.height||0, hItems:Array.isArray(c.hItems)?c.hItems:[]})))); }catch(e){} }
+function saveTapeCuts(){ try{ localStorage.setItem(TAPE_CUTS_KEY, JSON.stringify(tapeCuts.map(c=>({name:c.name||'', items:c.items, height:c.height||0, hItems:Array.isArray(c.hItems)?c.hItems:[], bevel:normalizeBevel(c.bevel)})))); }catch(e){} }
 function formatTapeNumber(n){ return String(Math.round(n*1000)/1000); }
 
 function tapeGroupSum(){ return tapeEntries.reduce((s,v)=> s + parseNum(v), 0); }
@@ -188,11 +198,13 @@ function tapeCutsArea(){ return tapeCuts.reduce((s,c)=> s + cutArea(c), 0); }
 function formatArea(n){ return (Number.isFinite(n) ? n : 0).toFixed(2); }
 function tapeCutsSum(){ return tapeCuts.reduce((s,c)=> s + cutSum(c), 0); }
 // Приводим отсечку к виду {name, items:[...]}. Поддерживаем старый формат (просто число).
+function normalizeBevel(v){ return (v === 'left' || v === 'right' || v === 'both') ? v : 'none'; }
 function normalizeCut(el){
   const hi = (el && Array.isArray(el.hItems)) ? el.hItems.map(x=>parseNum(x)) : [];
-  if(el && Array.isArray(el.items)) return { name: String(el.name || ''), items: el.items.map(x=>parseNum(x)), height: parseNum(el.height), hItems: hi };
-  if(el && typeof el === 'object' && 'value' in el) return { name: String(el.name || ''), items: [parseNum(el.value)], height: parseNum(el.height), hItems: hi };
-  return { name: '', items: [parseNum(el)], height: 0, hItems: hi };
+  const bv = normalizeBevel(el && el.bevel);
+  if(el && Array.isArray(el.items)) return { name: String(el.name || ''), items: el.items.map(x=>parseNum(x)), height: parseNum(el.height), hItems: hi, bevel: bv };
+  if(el && typeof el === 'object' && 'value' in el) return { name: String(el.name || ''), items: [parseNum(el.value)], height: parseNum(el.height), hItems: hi, bevel: bv };
+  return { name: '', items: [parseNum(el)], height: 0, hItems: hi, bevel: bv };
 }
 function updateTapeTotals(){
   const g = tapeGroupSum(), c = tapeCutsSum();
@@ -247,16 +259,31 @@ function foldLines(px, py, pw, ph, wItems, hItems, rot, scale){
   addAxis(hItems, false);
   return out;
 }
+const LAYOUT_BEVEL_COLOR = '#f59e0b';   // янтарный — кромка отпила 45°
+function bevelEdges(ot){ const b = (ot && ot.bevel) || 'none'; return { L: b === 'left' || b === 'both', R: b === 'right' || b === 'both' }; }
+// Кромки отпила 45° (левая/правая по исходной ширине). rot меняет их на верх/низ.
+function bevelLines(px, py, pw, ph, ot, rot){
+  const e = bevelEdges(ot), out = [];
+  const add = (x1,y1,x2,y2)=> out.push({ x1, y1, x2, y2, mx: (x1 + x2) / 2, my: (y1 + y2) / 2 });
+  if(!rot){
+    if(e.L) add(px, py, px, py + ph);
+    if(e.R) add(px + pw, py, px + pw, py + ph);
+  } else {
+    if(e.L) add(px, py, px + pw, py);
+    if(e.R) add(px, py + ph, px + pw, py + ph);
+  }
+  return out;
+}
 function collectOtsechki(){
   const list = [];
   tapeCuts.forEach((cut, ci)=>{
     const h = cutHeightMm(cut);
     const items = (cut.items || []).map(v=>parseNum(v)).filter(w=>w > 0);
-    if(h > 0 && items.length) list.push({ no: ci + 1, name: cut.name || '', h, items, hItems: cutHItems(cut) });
+    if(h > 0 && items.length) list.push({ no: ci + 1, name: cut.name || '', h, items, hItems: cutHItems(cut), bevel: normalizeBevel(cut.bevel) });
   });
   const gh = groupHeightMm();
   const gi = tapeEntries.map(v=>parseNum(v)).filter(w=>w > 0);
-  if(gh > 0 && gi.length) list.push({ no: null, name: '', h: gh, items: gi, hItems: [] });
+  if(gh > 0 && gi.length) list.push({ no: null, name: '', h: gh, items: gi, hItems: [], bevel: 'none' });
   return list;
 }
 // Развёртка одной отсечки. maxFs — предел кегля (в увеличении больше, поэтому
@@ -288,10 +315,14 @@ function buildStripSvg(ot, scale, dim, maxFs){
     }
     cxmm += w;
   });
-  // Голубые линии реза по краям отсечки.
+  // Линии реза по краям отсечки: голубые обычные; янтарные пунктирные — отпил 45°.
   const yT = oy.toFixed(2), yB = (oy + stripH).toFixed(2);
-  let cuts = `<line x1="${ox.toFixed(2)}" y1="${yT}" x2="${ox.toFixed(2)}" y2="${yB}" stroke="${LAYOUT_CUT_COLOR}" stroke-width="2"></line>`
-           + `<line x1="${(ox + stripW).toFixed(2)}" y1="${yT}" x2="${(ox + stripW).toFixed(2)}" y2="${yB}" stroke="${LAYOUT_CUT_COLOR}" stroke-width="2"></line>`;
+  const be = bevelEdges(ot);
+  const edge = (x, beveled)=> `<line x1="${x.toFixed(2)}" y1="${yT}" x2="${x.toFixed(2)}" y2="${yB}" stroke="${beveled ? LAYOUT_BEVEL_COLOR : LAYOUT_CUT_COLOR}" stroke-width="${beveled ? 3 : 2}"${beveled ? ' stroke-dasharray="6 3"' : ''}></line>`;
+  let cuts = edge(ox, be.L) + edge(ox + stripW, be.R);
+  const bevFs = Math.min(maxFs, 11);
+  if(be.L) cuts += `<text x="${(ox + 3).toFixed(2)}" y="${(oy + bevFs + 2).toFixed(2)}" font-size="${bevFs.toFixed(2)}" fill="${LAYOUT_BEVEL_COLOR}">45°</text>`;
+  if(be.R) cuts += `<text x="${(ox + stripW - 3).toFixed(2)}" y="${(oy + bevFs + 2).toFixed(2)}" text-anchor="end" font-size="${bevFs.toFixed(2)}" fill="${LAYOUT_BEVEL_COLOR}">45°</text>`;
   // Горизонтальные линии сгиба (отвороты по высоте) на всю ширину.
   let hfolds = '';
   foldLines(ox, oy, stripW, stripH, [], ot.hItems || [], false, scale).forEach(l=>{
@@ -555,6 +586,10 @@ function buildNestSheetSvg(sheet, scale, dim, maxFs){
       });
       // контур реза панели (голубой / красный если 1500)
       cuts += `<rect x="${px.toFixed(2)}" y="${py.toFixed(2)}" width="${pw.toFixed(2)}" height="${ph.toFixed(2)}" fill="none" stroke="${cutStroke}" stroke-width="2"></rect>`;
+      // кромки отпила 45° (янтарные пунктирные поверх контура)
+      bevelLines(px, py, pw, ph, it.ot, it.rot).forEach(l=>{
+        cuts += `<line x1="${l.x1.toFixed(2)}" y1="${l.y1.toFixed(2)}" x2="${l.x2.toFixed(2)}" y2="${l.y2.toFixed(2)}" stroke="${LAYOUT_BEVEL_COLOR}" stroke-width="2.5" stroke-dasharray="5 3"></line>`;
+      });
       // номер отсечки по центру панели
       if(it.ot.no){
         const nfs = Math.min(maxFs, Math.max(9, Math.min(pw, ph) / 3));
@@ -628,6 +663,7 @@ const EXPORT_LAYERS = [       // имя, цвет AutoCAD ACI, цвет для S
   { name: 'SHEET', aci: 8, svg: '#9aa4b2' },
   { name: 'CUT',   aci: 5, svg: '#0047ab' },
   { name: 'FOLD',  aci: 3, svg: '#2e8b57' },
+  { name: 'BEVEL', aci: 30, svg: '#c26a00' },   // кромка отпила 45°
   { name: 'LABEL', aci: 7, svg: '#111111' },
 ];
 // Раскладываем все листы плана рядом по горизонтали и собираем примитивы
@@ -649,6 +685,11 @@ function collectCutPlanPrimitives(){
         // при повороте детали оси меняются местами. scale=1 (реальные мм).
         foldLines(px, py, it.pw, it.ph, it.ot.items || [], it.ot.hItems || [], it.rot, 1)
           .forEach(l=> lines.push({ layer: 'FOLD', x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2 }));
+        // кромки отпила 45° — на слое BEVEL, с меткой «45»
+        bevelLines(px, py, it.pw, it.ph, it.ot, it.rot).forEach(l=>{
+          lines.push({ layer: 'BEVEL', x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2 });
+          texts.push({ layer: 'BEVEL', x: l.mx, y: l.my, h: Math.min(EXPORT_LABEL_H, 30), dxf: '45', svg: '45°' });
+        });
         if(it.ot.no){
           const fs = Math.min(EXPORT_LABEL_H, Math.max(20, Math.min(it.pw, it.ph) / 3));
           texts.push({ layer: 'LABEL', x: px + it.pw / 2, y: py + it.ph / 2, h: fs, dxf: 'N' + it.ot.no, svg: '№' + it.ot.no });
@@ -715,11 +756,11 @@ function buildSvg(prim){
   let body = '';
   EXPORT_LAYERS.forEach(l=>{
     let g = '';
-    if(l.name === 'FOLD')
-      lines.filter(x=> x.layer === l.name).forEach(x=>{ g += `<line x1="${x.x1.toFixed(2)}" y1="${x.y1.toFixed(2)}" x2="${x.x2.toFixed(2)}" y2="${x.y2.toFixed(2)}" stroke="${l.svg}" stroke-width="1" stroke-dasharray="8 6"/>`; });
+    if(l.name === 'FOLD' || l.name === 'BEVEL')
+      lines.filter(x=> x.layer === l.name).forEach(x=>{ g += `<line x1="${x.x1.toFixed(2)}" y1="${x.y1.toFixed(2)}" x2="${x.x2.toFixed(2)}" y2="${x.y2.toFixed(2)}" stroke="${l.svg}" stroke-width="${l.name === 'BEVEL' ? 2 : 1}" stroke-dasharray="8 6"/>`; });
     if(l.name === 'SHEET' || l.name === 'CUT')
       rects.filter(x=> x.layer === l.name).forEach(x=>{ g += `<rect x="${x.x.toFixed(2)}" y="${x.y.toFixed(2)}" width="${x.w.toFixed(2)}" height="${x.h.toFixed(2)}" fill="none" stroke="${l.svg}" stroke-width="${l.name === 'CUT' ? 2 : 1}"${l.name === 'SHEET' ? ' stroke-dasharray="20 12"' : ''}/>`; });
-    if(l.name === 'LABEL')
+    if(l.name === 'LABEL' || l.name === 'BEVEL')
       texts.filter(x=> x.layer === l.name).forEach(x=>{ g += `<text x="${x.x.toFixed(2)}" y="${x.y.toFixed(2)}" font-size="${x.h.toFixed(2)}" font-family="sans-serif" text-anchor="middle" dominant-baseline="central" fill="${l.svg}">${escapeHtml(x.svg)}</text>`; });
     if(g) body += `<g id="${l.name}" data-layer="${l.name}" stroke-linecap="round">${g}</g>`;
   });
@@ -763,6 +804,7 @@ function renderTapeCuts(){
   const list = $('#tapeCutsList'); list.innerHTML = '';
   tapeCuts.forEach((cut, ci)=>{
     if(!Array.isArray(cut.hItems)) cut.hItems = [];
+    cut.bevel = normalizeBevel(cut.bevel);
     const block = document.createElement('div'); block.className = 'cut-block';
 
     // --- шапка: №, название (если задано), сумма, переключатель истории, удалить ---
@@ -797,6 +839,15 @@ function renderTapeCuts(){
     hToggle.type = 'button'; hToggle.className = 'btn ghost small'; hToggle.style.padding = '2px 8px';
     const setHToggle = ()=>{ hToggle.textContent = (cut._hopen ? '▾' : '▸') + ' высота (' + cut.hItems.length + ')'; };
     setHToggle();
+    // кромка отпила 45°: нет → левая → правая → обе (по кругу)
+    const bevBtn = document.createElement('button');
+    bevBtn.type = 'button'; bevBtn.className = 'btn ghost small'; bevBtn.style.padding = '2px 8px';
+    bevBtn.title = 'Кромка отпила 45° для стыка «на ус» (нет → левая → правая → обе)';
+    const BEV_LABEL = { none: '45°: нет', left: '45°: лев', right: '45°: прав', both: '45°: обе' };
+    const BEV_ORDER = ['none', 'left', 'right', 'both'];
+    const setBev = ()=>{ bevBtn.textContent = BEV_LABEL[cut.bevel]; bevBtn.style.color = cut.bevel === 'none' ? '' : LAYOUT_BEVEL_COLOR; };
+    setBev();
+    bevBtn.addEventListener('click', e=>{ e.preventDefault(); cut.bevel = BEV_ORDER[(BEV_ORDER.indexOf(cut.bevel) + 1) % 4]; setBev(); saveTapeCuts(); updateTapeTotals(); });
     const del = document.createElement('button'); del.type = 'button'; del.className = 'btn ghost'; del.textContent = '✕';
     del.addEventListener('click', e=>{ e.preventDefault(); tapeCuts.splice(ci, 1); saveTapeCuts(); renderTapeCuts(); });
 
@@ -824,7 +875,7 @@ function renderTapeCuts(){
     nameView.addEventListener('click', e=>{ e.preventDefault(); startNameEdit(); });
 
     const spacer = document.createElement('span'); spacer.style.flex = '1';
-    head.appendChild(noBtn); head.appendChild(areaEl); head.appendChild(nameView); head.appendChild(spacer); head.appendChild(sumEl); head.appendChild(hWrap); head.appendChild(toggle); head.appendChild(hToggle); head.appendChild(del);
+    head.appendChild(noBtn); head.appendChild(areaEl); head.appendChild(nameView); head.appendChild(spacer); head.appendChild(sumEl); head.appendChild(hWrap); head.appendChild(toggle); head.appendChild(hToggle); head.appendChild(bevBtn); head.appendChild(del);
     block.appendChild(head);
 
     // --- история чисел (свёрнута по умолчанию), каждое со своим номером ---
@@ -881,11 +932,22 @@ function addTapeEntry(){
 function cutTape(){
   if(!tapeEntries.length){ $('#tapeInput').focus(); return; }
   // Сохраняем историю чисел и высоту элемента, из которых сложилась отсечка.
-  tapeCuts.push({ name: '', items: tapeEntries.map(v=>parseNum(v)), height: groupHeightMm() });
+  tapeCuts.push({ name: '', items: tapeEntries.map(v=>parseNum(v)), height: groupHeightMm(), hItems: [], bevel: 'none' });
   tapeEntries = [];
   saveTapeCuts(); saveTapeEntries();
   renderTape(); renderTapeCuts();
   $('#tapeInput').focus();
+}
+// Угол 90° из двух листов: панель A (правая кромка 45°) + панель B (левая кромка 45°).
+function addCorner(){
+  const A = parseNum($('#cornerA').value), B = parseNum($('#cornerB').value), H = parseNum($('#cornerH').value);
+  const info = $('#cornerAdd');
+  if(!(A > 0) || !(B > 0) || !(H > 0)){ $(A > 0 ? (B > 0 ? '#cornerH' : '#cornerB') : '#cornerA').focus(); return; }
+  tapeCuts.push({ name: 'Угол A', items: [A], height: H, hItems: [], bevel: 'right' });
+  tapeCuts.push({ name: 'Угол B', items: [B], height: H, hItems: [], bevel: 'left' });
+  saveTapeCuts(); renderTapeCuts();
+  $('#cornerA').value = ''; $('#cornerB').value = ''; $('#cornerH').value = '';
+  $('#cornerA').focus();
 }
 function clearTape(){
   if(!tapeEntries.length && !tapeCuts.length) return;
@@ -926,6 +988,7 @@ function changeGroupHUnit(){
 
 on($('#tapeAdd'),'click', e=>{ e.preventDefault(); addTapeEntry(); });
 on($('#tapeCut'),'click', e=>{ e.preventDefault(); cutTape(); });
+on($('#cornerAdd'),'click', e=>{ e.preventDefault(); addCorner(); });
 on($('#tapeClear'),'click', e=>{ e.preventDefault(); clearTape(); });
 on($('#tapeInput'),'keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addTapeEntry(); } });
 on($('#tapeSheet'),'input', e=>{ saveTapeSheet(); updateTapeTotals(); renderTapeCuts(); });
