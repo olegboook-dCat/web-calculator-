@@ -61,6 +61,18 @@
             </div>
             <div class="muted small" style="margin-top:4px">Создаст две панели (A×H и B×H); стыковые кромки помечаются «отпил 45°» — по ним стык «на ус» даёт наружный угол 90°. Размеры в мм.</div>
           </details>
+          <details style="margin-top:8px">
+            <summary class="muted small" style="cursor:pointer">◺ Стык в плоскости из двух листов (диагональный рез)</summary>
+            <div class="actions" style="margin-top:8px;align-items:center;flex-wrap:wrap;gap:6px">
+              <span class="muted small">Сторона A:</span><input type="text" id="jointA" inputmode="decimal" placeholder="мм" style="max-width:70px">
+              <span class="muted small">Сторона B:</span><input type="text" id="jointB" inputmode="decimal" placeholder="мм" style="max-width:70px">
+              <span class="muted small">Высота:</span><input type="text" id="jointH" inputmode="decimal" placeholder="мм" style="max-width:70px">
+              <span class="muted small">Угол:</span><input type="text" id="jointDeg" inputmode="decimal" value="45" style="max-width:52px"><span class="muted small">° по</span>
+              <button class="btn ghost small" id="jointMode" style="padding:4px 10px" title="Угол: реза кромки или готового поворота">кромке</button>
+              <button class="btn" id="jointAdd">Создать стык</button>
+            </div>
+            <div class="muted small" style="margin-top:4px">Создаст две панели (A×H и B×H) с реальным диагональным резом кромок — стыкуются встык в одной плоскости (Г-панель). Контур идёт в раскрой и экспорт. Размеры в мм.</div>
+          </details>
           <div class="table-scroll">
           <table id="tapeTbl">
             <thead><tr><th>#</th><th>Значение (текущая группа)</th><th></th></tr></thead>
@@ -176,7 +188,7 @@ function loadTapeArray(key){
 function saveTapeEntries(){ try{ localStorage.setItem(TAPE_KEY, JSON.stringify(tapeEntries)); }catch(e){} }
 // Сохраняем только {name, items}; служебный флаг раскрытия (_open) не пишем,
 // чтобы после перезагрузки история была свёрнута по умолчанию.
-function saveTapeCuts(){ try{ localStorage.setItem(TAPE_CUTS_KEY, JSON.stringify(tapeCuts.map(c=>({name:c.name||'', items:c.items, height:c.height||0, hItems:Array.isArray(c.hItems)?c.hItems:[], bevel:normalizeBevel(c.bevel)})))); }catch(e){} }
+function saveTapeCuts(){ try{ localStorage.setItem(TAPE_CUTS_KEY, JSON.stringify(tapeCuts.map(c=>({name:c.name||'', items:c.items, height:c.height||0, hItems:Array.isArray(c.hItems)?c.hItems:[], bevel:normalizeBevel(c.bevel), angEdge:normalizeAngEdge(c.angEdge), angDeg:Math.max(0,parseNum(c.angDeg)), angCorner:(c.angCorner==='bottom'?'bottom':'top'), angMode:(c.angMode==='corner'?'corner':'edge')})))); }catch(e){} }
 function formatTapeNumber(n){ return String(Math.round(n*1000)/1000); }
 
 function tapeGroupSum(){ return tapeEntries.reduce((s,v)=> s + parseNum(v), 0); }
@@ -199,12 +211,22 @@ function formatArea(n){ return (Number.isFinite(n) ? n : 0).toFixed(2); }
 function tapeCutsSum(){ return tapeCuts.reduce((s,c)=> s + cutSum(c), 0); }
 // Приводим отсечку к виду {name, items:[...]}. Поддерживаем старый формат (просто число).
 function normalizeBevel(v){ return (v === 'left' || v === 'right' || v === 'both') ? v : 'none'; }
+function normalizeAngEdge(v){ return (v === 'left' || v === 'right' || v === 'both') ? v : 'none'; }
+// Диагональный рез кромки (стык в плоскости): {edge, deg, corner}. deg — угол
+// диагонали от вертикальной кромки. angMode ('edge'/'corner') — только для UI.
+function cutAng(cut){
+  return { edge: normalizeAngEdge(cut && cut.angEdge), deg: Math.max(0, parseNum(cut && cut.angDeg)),
+           corner: (cut && cut.angCorner === 'bottom') ? 'bottom' : 'top' };
+}
 function normalizeCut(el){
   const hi = (el && Array.isArray(el.hItems)) ? el.hItems.map(x=>parseNum(x)) : [];
   const bv = normalizeBevel(el && el.bevel);
-  if(el && Array.isArray(el.items)) return { name: String(el.name || ''), items: el.items.map(x=>parseNum(x)), height: parseNum(el.height), hItems: hi, bevel: bv };
-  if(el && typeof el === 'object' && 'value' in el) return { name: String(el.name || ''), items: [parseNum(el.value)], height: parseNum(el.height), hItems: hi, bevel: bv };
-  return { name: '', items: [parseNum(el)], height: 0, hItems: hi, bevel: bv };
+  const ang = { angEdge: normalizeAngEdge(el && el.angEdge), angDeg: Math.max(0, parseNum(el && el.angDeg)),
+                angCorner: (el && el.angCorner === 'bottom') ? 'bottom' : 'top',
+                angMode: (el && el.angMode === 'corner') ? 'corner' : 'edge' };
+  if(el && Array.isArray(el.items)) return Object.assign({ name: String(el.name || ''), items: el.items.map(x=>parseNum(x)), height: parseNum(el.height), hItems: hi, bevel: bv }, ang);
+  if(el && typeof el === 'object' && 'value' in el) return Object.assign({ name: String(el.name || ''), items: [parseNum(el.value)], height: parseNum(el.height), hItems: hi, bevel: bv }, ang);
+  return Object.assign({ name: '', items: [parseNum(el)], height: 0, hItems: hi, bevel: bv }, ang);
 }
 function updateTapeTotals(){
   const g = tapeGroupSum(), c = tapeCutsSum();
@@ -274,16 +296,40 @@ function bevelLines(px, py, pw, ph, ot, rot){
   }
   return out;
 }
+// --- Стык в плоскости: диагональный рез кромки -------------------------------
+// ang = {edge:'none'|'left'|'right'|'both', deg:угол от вертикальной кромки,
+// corner:'top'|'bottom'}. Возвращает контур панели как список точек {x,y}
+// (мм, локально W×H, Y вниз). Без реза — прямоугольник (4 угла).
+function angRun(H, deg){ const d = Math.max(0, Math.min(89, deg || 0)); return H * Math.tan(d * Math.PI / 180); }
+function panelOutline(W, H, ang){
+  ang = ang || {};
+  if((ang.edge || 'none') === 'none' || !(ang.deg > 0))
+    return [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: H }, { x: 0, y: H }];
+  const run = Math.min(W, angRun(H, ang.deg));
+  const top = ang.corner !== 'bottom';                 // 'top' по умолчанию
+  const L = ang.edge === 'left' || ang.edge === 'both';
+  const R = ang.edge === 'right' || ang.edge === 'both';
+  const tl = (L && !top) ? { x: run, y: 0 } : { x: 0, y: 0 };       // left+bottom срезает TL
+  const tr = (R && !top) ? { x: W - run, y: 0 } : { x: W, y: 0 };   // right+bottom срезает TR
+  const br = (R && top)  ? { x: W - run, y: H } : { x: W, y: H };   // right+top срезает BR
+  const bl = (L && top)  ? { x: run, y: H } : { x: 0, y: H };       // left+top срезает BL
+  return [tl, tr, br, bl];
+}
+// Точка панели (локальные W×H, Y вниз) → координаты на листе (px/py, масштаб s),
+// с учётом поворота (при rot ширина идёт по вертикали).
+function panelPoint(pt, px, py, s, rot){
+  return rot ? { x: px + pt.y * s, y: py + pt.x * s } : { x: px + pt.x * s, y: py + pt.y * s };
+}
 function collectOtsechki(){
   const list = [];
   tapeCuts.forEach((cut, ci)=>{
     const h = cutHeightMm(cut);
     const items = (cut.items || []).map(v=>parseNum(v)).filter(w=>w > 0);
-    if(h > 0 && items.length) list.push({ no: ci + 1, name: cut.name || '', h, items, hItems: cutHItems(cut), bevel: normalizeBevel(cut.bevel) });
+    if(h > 0 && items.length) list.push({ no: ci + 1, name: cut.name || '', h, items, hItems: cutHItems(cut), bevel: normalizeBevel(cut.bevel), ang: cutAng(cut) });
   });
   const gh = groupHeightMm();
   const gi = tapeEntries.map(v=>parseNum(v)).filter(w=>w > 0);
-  if(gh > 0 && gi.length) list.push({ no: null, name: '', h: gh, items: gi, hItems: [], bevel: 'none' });
+  if(gh > 0 && gi.length) list.push({ no: null, name: '', h: gh, items: gi, hItems: [], bevel: 'none', ang: { edge: 'none' } });
   return list;
 }
 // Развёртка одной отсечки. maxFs — предел кегля (в увеличении больше, поэтому
@@ -299,13 +345,16 @@ function buildStripSvg(ot, scale, dim, maxFs){
   const PADR = 8, PADB = 8;
   const ox = LEFT, oy = TOP;
   const svgW = ox + stripW + PADR, svgH = oy + stripH + PADB;
+  // Контур панели (полигон): прямоугольник или трапеция при диагональном резе.
+  const ang = ot.ang || { edge: 'none' };
+  const outPts = panelOutline(totalW, ot.h, ang).map(p=> panelPoint(p, ox, oy, scale, false));
+  const polyStr = outPts.map(p=> p.x.toFixed(2) + ',' + p.y.toFixed(2)).join(' ');
+  const clipId = 'clip' + Math.random().toString(36).slice(2, 9);
   let fills = '', ticks = '', lens = '';
   let cxmm = 0;
   ot.items.forEach(w=>{
     const x = ox + cxmm * scale, wpx = Math.max(2, w * scale);
     fills += `<rect x="${x.toFixed(2)}" y="${oy.toFixed(2)}" width="${wpx.toFixed(2)}" height="${stripH.toFixed(2)}" fill="${LAYOUT_EL_FILL}" stroke="${LAYOUT_EL_STROKE}" stroke-width="0.8"></rect>`;
-    // Длина — над элементом, за пределами фигуры; кегль подгоняем под ширину,
-    // поэтому на тонком элементе подпись мелкая и читается только при увеличении.
     const label = dim(w);
     const fs = Math.min(topFs, wpx / (0.62 * label.length + 0.3));
     const cx = (x + wpx / 2).toFixed(2);
@@ -315,19 +364,20 @@ function buildStripSvg(ot, scale, dim, maxFs){
     }
     cxmm += w;
   });
-  // Линии реза по краям отсечки: голубые обычные; янтарные пунктирные — отпил 45°.
-  const yT = oy.toFixed(2), yB = (oy + stripH).toFixed(2);
-  const be = bevelEdges(ot);
-  const edge = (x, beveled)=> `<line x1="${x.toFixed(2)}" y1="${yT}" x2="${x.toFixed(2)}" y2="${yB}" stroke="${beveled ? LAYOUT_BEVEL_COLOR : LAYOUT_CUT_COLOR}" stroke-width="${beveled ? 3 : 2}"${beveled ? ' stroke-dasharray="6 3"' : ''}></line>`;
-  let cuts = edge(ox, be.L) + edge(ox + stripW, be.R);
-  const bevFs = Math.min(maxFs, 11);
-  if(be.L) cuts += `<text x="${(ox + 3).toFixed(2)}" y="${(oy + bevFs + 2).toFixed(2)}" font-size="${bevFs.toFixed(2)}" fill="${LAYOUT_BEVEL_COLOR}">45°</text>`;
-  if(be.R) cuts += `<text x="${(ox + stripW - 3).toFixed(2)}" y="${(oy + bevFs + 2).toFixed(2)}" text-anchor="end" font-size="${bevFs.toFixed(2)}" fill="${LAYOUT_BEVEL_COLOR}">45°</text>`;
   // Горизонтальные линии сгиба (отвороты по высоте) на всю ширину.
   let hfolds = '';
   foldLines(ox, oy, stripW, stripH, [], ot.hItems || [], false, scale).forEach(l=>{
     hfolds += `<line x1="${l.x1.toFixed(2)}" y1="${l.y1.toFixed(2)}" x2="${l.x2.toFixed(2)}" y2="${l.y2.toFixed(2)}" stroke="${LAYOUT_EL_STROKE}" stroke-width="0.8"></line>`;
   });
+  // Контур реза (голубой полигон) + янтарные метки скошенных кромок 45° (отпил через толщину).
+  const be = bevelEdges(ot);
+  let cuts = `<polygon points="${polyStr}" fill="none" stroke="${LAYOUT_CUT_COLOR}" stroke-width="2"></polygon>`;
+  bevelLines(ox, oy, stripW, stripH, ot, false).forEach(l=>{
+    cuts += `<line x1="${l.x1.toFixed(2)}" y1="${l.y1.toFixed(2)}" x2="${l.x2.toFixed(2)}" y2="${l.y2.toFixed(2)}" stroke="${LAYOUT_BEVEL_COLOR}" stroke-width="3" stroke-dasharray="6 3"></line>`;
+  });
+  const bevFs = Math.min(maxFs, 11);
+  if(be.L) cuts += `<text x="${(ox + 3).toFixed(2)}" y="${(oy + bevFs + 2).toFixed(2)}" font-size="${bevFs.toFixed(2)}" fill="${LAYOUT_BEVEL_COLOR}">45°</text>`;
+  if(be.R) cuts += `<text x="${(ox + stripW - 3).toFixed(2)}" y="${(oy + bevFs + 2).toFixed(2)}" text-anchor="end" font-size="${bevFs.toFixed(2)}" fill="${LAYOUT_BEVEL_COLOR}">45°</text>`;
   // Высота — вдоль левой стенки. Если заданы отвороты — подписываем каждый сегмент,
   // иначе общую высоту.
   let heightTxt = '';
@@ -351,7 +401,9 @@ function buildStripSvg(ot, scale, dim, maxFs){
     num = `<text x="${(ox + stripW / 2).toFixed(2)}" y="${(oy + stripH / 2 + nfs * 0.35).toFixed(2)}" text-anchor="middle" font-size="${nfs.toFixed(2)}" font-weight="700" fill="#e2e8f0">№${ot.no}</text>`;
   }
   return `<svg width="${svgW.toFixed(1)}" height="${svgH.toFixed(1)}" style="border-radius:4px;background:#0b1221">`
-    + fills + hfolds + ticks + cuts + lens + heightTxt + num + `</svg>`;
+    + `<clipPath id="${clipId}"><polygon points="${polyStr}"></polygon></clipPath>`
+    + `<g clip-path="url(#${clipId})">` + fills + hfolds + `</g>`
+    + ticks + cuts + lens + heightTxt + num + `</svg>`;
 }
 function renderLayout(){
   const host = $('#tapeLayout'); if(!host) return;
@@ -561,36 +613,36 @@ function buildCutPlan(list, L){
 // линии сгиба, номер по центру). Панели на листе 1500 — красная подсветка.
 function buildNestSheetSvg(sheet, scale, dim, maxFs){
   const pxW = Math.max(1, sheet.Wsheet * scale), pxL = Math.max(1, sheet.L * scale);
-  let fills = '', folds = '', cuts = '', nums = '';
+  let defs = '', body = '', cuts = '', nums = '';
   sheet.shelves.forEach(shelf=>{
     shelf.items.forEach(it=>{
       const px = it.x * scale, py = it.y * scale, pw = Math.max(2, it.pw * scale), ph = Math.max(2, it.ph * scale);
       const fill = sheet.red ? LAYOUT_RED_FILL : LAYOUT_EL_FILL;
       const cutStroke = sheet.red ? LAYOUT_RED_STROKE : LAYOUT_CUT_COLOR;
-      // сегменты панели (заливка). При повороте детали сегменты идут по высоте.
+      // контур панели (полигон) с учётом поворота и диагонального реза
+      const outPts = panelOutline(panelWidth(it.ot), it.ot.h, it.ot.ang).map(p=> panelPoint(p, px, py, scale, it.rot));
+      const polyStr = outPts.map(p=> p.x.toFixed(2) + ',' + p.y.toFixed(2)).join(' ');
+      const clipId = 'nc' + Math.random().toString(36).slice(2, 9);
+      defs += `<clipPath id="${clipId}"><polygon points="${polyStr}"></polygon></clipPath>`;
+      // заливка сегментов + линии сгиба по высоте — отсекаем по контуру панели
+      let inner = '';
       let cxmm = 0;
       it.ot.items.forEach((w)=>{
         const sw = Math.max(1, w * scale);
-        if(it.rot){
-          const sy = py + cxmm * scale;
-          fills += `<rect x="${px.toFixed(2)}" y="${sy.toFixed(2)}" width="${pw.toFixed(2)}" height="${sw.toFixed(2)}" fill="${fill}" stroke="${LAYOUT_EL_STROKE}" stroke-width="0.6"></rect>`;
-        } else {
-          const sx = px + cxmm * scale;
-          fills += `<rect x="${sx.toFixed(2)}" y="${py.toFixed(2)}" width="${sw.toFixed(2)}" height="${ph.toFixed(2)}" fill="${fill}" stroke="${LAYOUT_EL_STROKE}" stroke-width="0.6"></rect>`;
-        }
+        if(it.rot){ const sy = py + cxmm * scale; inner += `<rect x="${px.toFixed(2)}" y="${sy.toFixed(2)}" width="${pw.toFixed(2)}" height="${sw.toFixed(2)}" fill="${fill}" stroke="${LAYOUT_EL_STROKE}" stroke-width="0.6"></rect>`; }
+        else { const sx = px + cxmm * scale; inner += `<rect x="${sx.toFixed(2)}" y="${py.toFixed(2)}" width="${sw.toFixed(2)}" height="${ph.toFixed(2)}" fill="${fill}" stroke="${LAYOUT_EL_STROKE}" stroke-width="0.6"></rect>`; }
         cxmm += w;
       });
-      // линии сгиба по высоте (отвороты); при повороте детали идут вертикально
       foldLines(px, py, pw, ph, [], it.ot.hItems || [], it.rot, scale).forEach(l=>{
-        folds += `<line x1="${l.x1.toFixed(2)}" y1="${l.y1.toFixed(2)}" x2="${l.x2.toFixed(2)}" y2="${l.y2.toFixed(2)}" stroke="${LAYOUT_EL_STROKE}" stroke-width="0.6"></line>`;
+        inner += `<line x1="${l.x1.toFixed(2)}" y1="${l.y1.toFixed(2)}" x2="${l.x2.toFixed(2)}" y2="${l.y2.toFixed(2)}" stroke="${LAYOUT_EL_STROKE}" stroke-width="0.6"></line>`;
       });
-      // контур реза панели (голубой / красный если 1500)
-      cuts += `<rect x="${px.toFixed(2)}" y="${py.toFixed(2)}" width="${pw.toFixed(2)}" height="${ph.toFixed(2)}" fill="none" stroke="${cutStroke}" stroke-width="2"></rect>`;
-      // кромки отпила 45° (янтарные пунктирные поверх контура)
+      body += `<g clip-path="url(#${clipId})">${inner}</g>`;
+      // контур реза (голубой/красный полигон)
+      cuts += `<polygon points="${polyStr}" fill="none" stroke="${cutStroke}" stroke-width="2"></polygon>`;
+      // кромки отпила 45° (янтарные пунктирные)
       bevelLines(px, py, pw, ph, it.ot, it.rot).forEach(l=>{
         cuts += `<line x1="${l.x1.toFixed(2)}" y1="${l.y1.toFixed(2)}" x2="${l.x2.toFixed(2)}" y2="${l.y2.toFixed(2)}" stroke="${LAYOUT_BEVEL_COLOR}" stroke-width="2.5" stroke-dasharray="5 3"></line>`;
       });
-      // номер отсечки по центру панели
       if(it.ot.no){
         const nfs = Math.min(maxFs, Math.max(9, Math.min(pw, ph) / 3));
         nums += `<text x="${(px + pw / 2).toFixed(2)}" y="${(py + ph / 2 + nfs * 0.35).toFixed(2)}" text-anchor="middle" font-size="${nfs.toFixed(2)}" font-weight="700" fill="#e2e8f0" style="paint-order:stroke" stroke="#0b1221" stroke-width="${(nfs * 0.16).toFixed(2)}">№${it.ot.no}</text>`;
@@ -599,8 +651,9 @@ function buildNestSheetSvg(sheet, scale, dim, maxFs){
   });
   const sheetStroke = sheet.red ? LAYOUT_RED_STROKE : '#475569';
   return `<svg width="${pxW.toFixed(1)}" height="${pxL.toFixed(1)}" style="border-radius:4px">`
+    + `<defs>${defs}</defs>`
     + `<rect x="0" y="0" width="${pxW.toFixed(1)}" height="${pxL.toFixed(1)}" fill="#0b1221" stroke="${sheetStroke}" stroke-width="1.5"></rect>`
-    + fills + folds + cuts + nums + `</svg>`;
+    + body + cuts + nums + `</svg>`;
 }
 function renderCutPlan(){
   const host = $('#cutPlan'); if(!host) return;
@@ -672,7 +725,7 @@ function collectCutPlanPrimitives(){
   const list = collectOtsechki().filter(ot=> ot.no);   // только отсечки (без текущей группы)
   const L = tapeSheetH() || 4000;
   const { sheets, oversize } = buildCutPlan(list, L);
-  const rects = [], lines = [], texts = [];
+  const rects = [], lines = [], texts = [], polys = [];
   let ox = 0, maxL = 0;
   sheets.forEach((sheet, si)=>{
     maxL = Math.max(maxL, sheet.L);
@@ -680,7 +733,8 @@ function collectCutPlanPrimitives(){
     sheet.shelves.forEach(shelf=>{
       shelf.items.forEach(it=>{
         const px = ox + it.x, py = it.y;
-        rects.push({ layer: 'CUT', x: px, y: py, w: it.pw, h: it.ph });
+        // контур реза панели: прямоугольник или трапеция (диагональный рез), с учётом поворота
+        polys.push({ layer: 'CUT', pts: panelOutline(panelWidth(it.ot), it.ot.h, it.ot.ang).map(p=> panelPoint(p, px, py, 1, it.rot)) });
         // линии сгиба — по ширине (вертикальные) и по высоте (горизонтальные);
         // при повороте детали оси меняются местами. scale=1 (реальные мм).
         foldLines(px, py, it.pw, it.ph, it.ot.items || [], it.ot.hItems || [], it.rot, 1)
@@ -702,7 +756,7 @@ function collectCutPlanPrimitives(){
   });
   const totalW = Math.max(0, ox - EXPORT_GAP);
   const totalH = maxL + EXPORT_LABEL_H * 2;   // запас снизу под подписи листов
-  return { rects, lines, texts, totalW, totalH, sheets, oversize };
+  return { rects, lines, texts, polys, totalW, totalH, sheets, oversize };
 }
 // Скачивание текстового файла в нужной кодировке.
 function downloadExportFile(filename, text, mime){
@@ -744,6 +798,12 @@ function buildDxf(prim){
     p(0,'SEQEND');
   };
   rects.forEach(r=> polyRect(r.layer, r.x, r.y, r.w, r.h));
+  // произвольные замкнутые контуры (панели: прямоугольник/трапеция)
+  (prim.polys || []).forEach(pl=>{
+    p(0,'POLYLINE'); p(8,pl.layer); p(66,1); p(70,1); p(10,0); p(20,0); p(30,0);
+    pl.pts.forEach(pt=>{ p(0,'VERTEX'); p(8,pl.layer); p(10,fx(pt.x)); p(20,fy(pt.y)); });
+    p(0,'SEQEND');
+  });
   lines.forEach(l=>{ p(0,'LINE'); p(8,l.layer); p(10,fx(l.x1)); p(20,fy(l.y1)); p(11,fx(l.x2)); p(21,fy(l.y2)); });
   texts.forEach(t=>{ p(0,'TEXT'); p(8,t.layer); p(10,fx(t.x)); p(20,fy(t.y)); p(40,t.h.toFixed(3)); p(1,t.dxf); p(72,1); p(73,2); p(11,fx(t.x)); p(21,fy(t.y)); });
   p(0,'ENDSEC'); p(0,'EOF');
@@ -751,13 +811,14 @@ function buildDxf(prim){
 }
 // --- SVG — реальные размеры в мм, слои через <g>, ось Y как в SVG (вниз) ------
 function buildSvg(prim){
-  const { rects, lines, texts, totalW, totalH } = prim;
+  const { rects, lines, texts, polys, totalW, totalH } = prim;
   const col = name => (EXPORT_LAYERS.find(l=> l.name === name) || {}).svg || '#000';
   let body = '';
   EXPORT_LAYERS.forEach(l=>{
     let g = '';
     if(l.name === 'FOLD' || l.name === 'BEVEL')
       lines.filter(x=> x.layer === l.name).forEach(x=>{ g += `<line x1="${x.x1.toFixed(2)}" y1="${x.y1.toFixed(2)}" x2="${x.x2.toFixed(2)}" y2="${x.y2.toFixed(2)}" stroke="${l.svg}" stroke-width="${l.name === 'BEVEL' ? 2 : 1}" stroke-dasharray="8 6"/>`; });
+    (polys || []).filter(x=> x.layer === l.name).forEach(x=>{ g += `<polygon points="${x.pts.map(p=> p.x.toFixed(2) + ',' + p.y.toFixed(2)).join(' ')}" fill="none" stroke="${l.svg}" stroke-width="2"/>`; });
     if(l.name === 'SHEET' || l.name === 'CUT')
       rects.filter(x=> x.layer === l.name).forEach(x=>{ g += `<rect x="${x.x.toFixed(2)}" y="${x.y.toFixed(2)}" width="${x.w.toFixed(2)}" height="${x.h.toFixed(2)}" fill="none" stroke="${l.svg}" stroke-width="${l.name === 'CUT' ? 2 : 1}"${l.name === 'SHEET' ? ' stroke-dasharray="20 12"' : ''}/>`; });
     if(l.name === 'LABEL' || l.name === 'BEVEL')
@@ -805,6 +866,9 @@ function renderTapeCuts(){
   tapeCuts.forEach((cut, ci)=>{
     if(!Array.isArray(cut.hItems)) cut.hItems = [];
     cut.bevel = normalizeBevel(cut.bevel);
+    cut.angEdge = normalizeAngEdge(cut.angEdge); cut.angDeg = Math.max(0, parseNum(cut.angDeg));
+    cut.angCorner = cut.angCorner === 'bottom' ? 'bottom' : 'top';
+    cut.angMode = cut.angMode === 'corner' ? 'corner' : 'edge';
     const block = document.createElement('div'); block.className = 'cut-block';
 
     // --- шапка: №, название (если задано), сумма, переключатель истории, удалить ---
@@ -848,6 +912,14 @@ function renderTapeCuts(){
     const setBev = ()=>{ bevBtn.textContent = BEV_LABEL[cut.bevel]; bevBtn.style.color = cut.bevel === 'none' ? '' : LAYOUT_BEVEL_COLOR; };
     setBev();
     bevBtn.addEventListener('click', e=>{ e.preventDefault(); cut.bevel = BEV_ORDER[(BEV_ORDER.indexOf(cut.bevel) + 1) % 4]; setBev(); saveTapeCuts(); updateTapeTotals(); });
+    // диагональный рез кромки (стык в плоскости): нет → лев → прав → обе
+    const angBtn = document.createElement('button');
+    angBtn.type = 'button'; angBtn.className = 'btn ghost small'; angBtn.style.padding = '2px 8px';
+    angBtn.title = 'Диагональный рез кромки для стыка в плоскости (нет → левая → правая → обе)';
+    const ANG_LABEL = { none: 'рез: нет', left: 'рез: лев', right: 'рез: прав', both: 'рез: обе' };
+    const setAngBtn = ()=>{ angBtn.textContent = ANG_LABEL[cut.angEdge]; angBtn.style.color = cut.angEdge === 'none' ? '' : '#38bdf8'; };
+    setAngBtn();
+    angBtn.addEventListener('click', e=>{ e.preventDefault(); const o = ['none','left','right','both']; cut.angEdge = o[(o.indexOf(cut.angEdge) + 1) % 4]; if(cut.angEdge !== 'none' && !(cut.angDeg > 0)) cut.angDeg = 45; saveTapeCuts(); renderTapeCuts(); });
     const del = document.createElement('button'); del.type = 'button'; del.className = 'btn ghost'; del.textContent = '✕';
     del.addEventListener('click', e=>{ e.preventDefault(); tapeCuts.splice(ci, 1); saveTapeCuts(); renderTapeCuts(); });
 
@@ -875,7 +947,7 @@ function renderTapeCuts(){
     nameView.addEventListener('click', e=>{ e.preventDefault(); startNameEdit(); });
 
     const spacer = document.createElement('span'); spacer.style.flex = '1';
-    head.appendChild(noBtn); head.appendChild(areaEl); head.appendChild(nameView); head.appendChild(spacer); head.appendChild(sumEl); head.appendChild(hWrap); head.appendChild(toggle); head.appendChild(hToggle); head.appendChild(bevBtn); head.appendChild(del);
+    head.appendChild(noBtn); head.appendChild(areaEl); head.appendChild(nameView); head.appendChild(spacer); head.appendChild(sumEl); head.appendChild(hWrap); head.appendChild(toggle); head.appendChild(hToggle); head.appendChild(bevBtn); head.appendChild(angBtn); head.appendChild(del);
     block.appendChild(head);
 
     // --- история чисел (свёрнута по умолчанию), каждое со своим номером ---
@@ -915,6 +987,30 @@ function renderTapeCuts(){
     block.appendChild(hitems);
     hToggle.addEventListener('click', e=>{ e.preventDefault(); cut._hopen = !cut._hopen; hitems.style.display = cut._hopen ? 'flex' : 'none'; setHToggle(); });
 
+    // --- параметры диагонального реза (стык в плоскости), если рез включён ---
+    if(cut.angEdge !== 'none'){
+      const angRow = document.createElement('div'); angRow.className = 'cut-items';
+      angRow.style.display = 'flex'; angRow.style.gap = '6px'; angRow.style.alignItems = 'center';
+      const shown = cut.angMode === 'corner' ? cut.angDeg * 2 : cut.angDeg;
+      angRow.innerHTML = `<span class="muted small">рез:</span>`;
+      const angInp = document.createElement('input'); angInp.type = 'text'; angInp.inputMode = 'decimal';
+      angInp.value = formatTapeNumber(shown); angInp.style.width = '56px'; angInp.title = 'Угол в градусах';
+      angRow.appendChild(angInp);
+      const degS = document.createElement('span'); degS.className = 'muted small'; degS.textContent = '°'; angRow.appendChild(degS);
+      const modeBtn = document.createElement('button'); modeBtn.type = 'button'; modeBtn.className = 'btn ghost small'; modeBtn.style.padding = '2px 8px';
+      modeBtn.textContent = cut.angMode === 'corner' ? 'поворота' : 'кромки';
+      modeBtn.title = 'Что означает угол: реза кромки или готового поворота панели';
+      angRow.appendChild(modeBtn);
+      const cornBtn = document.createElement('button'); cornBtn.type = 'button'; cornBtn.className = 'btn ghost small'; cornBtn.style.padding = '2px 8px';
+      cornBtn.textContent = cut.angCorner === 'bottom' ? 'от низа' : 'от верха';
+      cornBtn.title = 'От какого угла кромки идёт диагональ';
+      angRow.appendChild(cornBtn);
+      on(angInp, 'input', e=>{ const v = Math.max(0, parseNum(e.target.value)); cut.angDeg = cut.angMode === 'corner' ? v / 2 : v; saveTapeCuts(); updateTapeTotals(); });
+      modeBtn.addEventListener('click', e=>{ e.preventDefault(); cut.angMode = cut.angMode === 'corner' ? 'edge' : 'corner'; saveTapeCuts(); renderTapeCuts(); });
+      cornBtn.addEventListener('click', e=>{ e.preventDefault(); cut.angCorner = cut.angCorner === 'bottom' ? 'top' : 'bottom'; saveTapeCuts(); renderTapeCuts(); });
+      block.appendChild(angRow);
+    }
+
     list.appendChild(block);
   });
   updateTapeTotals();
@@ -948,6 +1044,21 @@ function addCorner(){
   saveTapeCuts(); renderTapeCuts();
   $('#cornerA').value = ''; $('#cornerB').value = ''; $('#cornerH').value = '';
   $('#cornerA').focus();
+}
+// Стык в плоскости: две панели с диагональным резом кромок (A — правая, B — левая).
+let jointMode = 'edge';   // 'edge' (угол реза кромки) | 'corner' (угол поворота)
+function addPlaneJoint(){
+  const A = parseNum($('#jointA').value), B = parseNum($('#jointB').value), H = parseNum($('#jointH').value);
+  const raw = Math.max(0, parseNum($('#jointDeg').value));
+  const edgeDeg = jointMode === 'corner' ? raw / 2 : raw;
+  if(!(A > 0) || !(B > 0) || !(H > 0) || !(edgeDeg > 0) || edgeDeg >= 90){
+    $(A > 0 ? (B > 0 ? (H > 0 ? '#jointDeg' : '#jointH') : '#jointB') : '#jointA').focus(); return;
+  }
+  tapeCuts.push({ name: 'Стык A', items: [A], height: H, hItems: [], bevel: 'none', angEdge: 'right', angDeg: edgeDeg, angCorner: 'top', angMode: jointMode });
+  tapeCuts.push({ name: 'Стык B', items: [B], height: H, hItems: [], bevel: 'none', angEdge: 'left', angDeg: edgeDeg, angCorner: 'top', angMode: jointMode });
+  saveTapeCuts(); renderTapeCuts();
+  $('#jointA').value = ''; $('#jointB').value = ''; $('#jointH').value = '';
+  $('#jointA').focus();
 }
 function clearTape(){
   if(!tapeEntries.length && !tapeCuts.length) return;
@@ -989,6 +1100,8 @@ function changeGroupHUnit(){
 on($('#tapeAdd'),'click', e=>{ e.preventDefault(); addTapeEntry(); });
 on($('#tapeCut'),'click', e=>{ e.preventDefault(); cutTape(); });
 on($('#cornerAdd'),'click', e=>{ e.preventDefault(); addCorner(); });
+on($('#jointAdd'),'click', e=>{ e.preventDefault(); addPlaneJoint(); });
+on($('#jointMode'),'click', e=>{ e.preventDefault(); jointMode = jointMode === 'corner' ? 'edge' : 'corner'; $('#jointMode').textContent = jointMode === 'corner' ? 'повороту' : 'кромке'; });
 on($('#tapeClear'),'click', e=>{ e.preventDefault(); clearTape(); });
 on($('#tapeInput'),'keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addTapeEntry(); } });
 on($('#tapeSheet'),'input', e=>{ saveTapeSheet(); updateTapeTotals(); renderTapeCuts(); });
