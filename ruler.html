@@ -867,6 +867,44 @@ function renderTape(){
   });
   updateTapeTotals();
 }
+// --- Перетаскивание отсечек (мышь + тач через Pointer Events) -----------------
+// Тянем за ручку. Во время движения переставляем DOM-узлы между собой; на
+// отпускании собираем новый порядок tapeCuts по data-idx и перерисовываем.
+let tapeDrag = null;
+function tapeDragMove(e){
+  if(!tapeDrag) return;
+  const { list, block } = tapeDrag;
+  const y = e.clientY;
+  const blocks = [...list.querySelectorAll('.cut-block')];
+  for(const b of blocks){
+    if(b === block) continue;
+    const r = b.getBoundingClientRect();
+    if(y < r.top + r.height / 2){ if(b.previousElementSibling !== block) list.insertBefore(block, b); return; }
+  }
+  if(list.lastElementChild !== block) list.appendChild(block);   // ниже всех
+}
+function tapeDragEnd(){
+  if(!tapeDrag) return;
+  const { list, block, handle, pointerId } = tapeDrag;
+  block.classList.remove('dragging');
+  try{ handle.releasePointerCapture(pointerId); }catch(e){}
+  const order = [...list.querySelectorAll('.cut-block')].map(b=> parseNum(b.dataset.idx));
+  tapeDrag = null;
+  const reordered = order.map(i=> tapeCuts[i]).filter(Boolean);
+  if(reordered.length === tapeCuts.length){ tapeCuts = reordered; saveTapeCuts(); }
+  renderTapeCuts();
+}
+function attachTapeDrag(handle, block, list){
+  handle.addEventListener('pointerdown', e=>{
+    e.preventDefault();
+    tapeDrag = { list, block, handle, pointerId: e.pointerId };
+    block.classList.add('dragging');
+    try{ handle.setPointerCapture(e.pointerId); }catch(err){}
+  });
+  handle.addEventListener('pointermove', e=>{ if(tapeDrag && tapeDrag.pointerId === e.pointerId) tapeDragMove(e); });
+  handle.addEventListener('pointerup', e=>{ if(tapeDrag && tapeDrag.pointerId === e.pointerId) tapeDragEnd(); });
+  handle.addEventListener('pointercancel', ()=>{ if(tapeDrag) tapeDragEnd(); });
+}
 function renderTapeCuts(){
   $('#tapeCutsWrap').style.display = tapeCuts.length ? 'block' : 'none';
   const list = $('#tapeCutsList'); list.innerHTML = '';
@@ -877,10 +915,20 @@ function renderTapeCuts(){
     cut.angMode = cut.angMode === 'corner' ? 'corner' : 'edge';
     cut.angAxis = cut.angAxis === 'width' ? 'width' : 'height';
     cut.angW2 = Math.max(0, parseNum(cut.angW2));
-    const block = document.createElement('div'); block.className = 'cut-block';
+    const block = document.createElement('div'); block.className = 'cut-block'; block.dataset.idx = ci;
 
     // --- шапка: №, название (если задано), сумма, переключатель истории, удалить ---
     const head = document.createElement('div'); head.className = 'cut-head';
+    // ручка перетаскивания (менять порядок отсечек)
+    const drag = document.createElement('span'); drag.className = 'cut-drag'; drag.textContent = '⠿';
+    drag.title = 'Перетащите, чтобы изменить порядок';
+    attachTapeDrag(drag, block, list);
+    // копия отсечки — вставляется сразу под этой (название сохраняется)
+    const copyBtn = document.createElement('button'); copyBtn.type = 'button'; copyBtn.className = 'btn ghost small cut-copy'; copyBtn.style.padding = '2px 8px';
+    copyBtn.textContent = '⧉ копия'; copyBtn.title = 'Скопировать отсечку (копия встанет ниже)';
+    copyBtn.addEventListener('click', e=>{ e.preventDefault();
+      const clone = JSON.parse(JSON.stringify(cut));
+      tapeCuts.splice(ci + 1, 0, clone); saveTapeCuts(); renderTapeCuts(); });
     const noBtn = document.createElement('button');
     noBtn.type = 'button'; noBtn.className = 'cut-no'; noBtn.textContent = '№' + (ci + 1);
     noBtn.title = 'Нажмите, чтобы задать/изменить название';
@@ -949,7 +997,7 @@ function renderTapeCuts(){
     nameView.addEventListener('click', e=>{ e.preventDefault(); startNameEdit(); });
 
     const spacer = document.createElement('span'); spacer.style.flex = '1';
-    head.appendChild(noBtn); head.appendChild(areaEl); head.appendChild(nameView); head.appendChild(spacer); head.appendChild(sumEl); head.appendChild(del); head.appendChild(hWrap); head.appendChild(toggle); head.appendChild(hToggle); head.appendChild(angBtn);
+    head.appendChild(drag); head.appendChild(noBtn); head.appendChild(areaEl); head.appendChild(nameView); head.appendChild(spacer); head.appendChild(sumEl); head.appendChild(copyBtn); head.appendChild(del); head.appendChild(hWrap); head.appendChild(toggle); head.appendChild(hToggle); head.appendChild(angBtn);
     block.appendChild(head);
 
     // --- история чисел (свёрнута по умолчанию), каждое со своим номером ---
