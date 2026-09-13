@@ -166,11 +166,14 @@ function loadTapeArray(key){
 function saveTapeEntries(){ try{ localStorage.setItem(TAPE_KEY, JSON.stringify(tapeEntries)); }catch(e){} }
 // Сохраняем только {name, items}; служебный флаг раскрытия (_open) не пишем,
 // чтобы после перезагрузки история была свёрнута по умолчанию.
-function saveTapeCuts(){ try{ localStorage.setItem(TAPE_CUTS_KEY, JSON.stringify(tapeCuts.map(c=>({name:c.name||'', items:c.items, height:c.height||0})))); }catch(e){} }
+function saveTapeCuts(){ try{ localStorage.setItem(TAPE_CUTS_KEY, JSON.stringify(tapeCuts.map(c=>({name:c.name||'', items:c.items, height:c.height||0, hItems:Array.isArray(c.hItems)?c.hItems:[]})))); }catch(e){} }
 function formatTapeNumber(n){ return String(Math.round(n*1000)/1000); }
 
 function tapeGroupSum(){ return tapeEntries.reduce((s,v)=> s + parseNum(v), 0); }
 function cutSum(cut){ return (cut && Array.isArray(cut.items) ? cut.items : []).reduce((s,v)=> s + parseNum(v), 0); }
+// Сегменты высоты (горизонтальные отвороты). Если заданы — высота = их сумма.
+function cutHItems(cut){ return (cut && Array.isArray(cut.hItems) ? cut.hItems : []).map(v=>parseNum(v)).filter(h=>h > 0); }
+function cutHeightMm(cut){ const hi = cutHItems(cut); return hi.length ? hi.reduce((s,h)=> s + h, 0) : parseNum(cut && cut.height); }
 // Габариты листа. Ширина: сумма кусков ≥95% ширины листа → красный.
 // Высота: высота элемента > высоты листа → фиолетовый.
 // Габариты листа приводим к мм по выбранной единице (пруски/высота элемента — в мм).
@@ -179,16 +182,17 @@ function tapeSheetH(){ return Math.max(0, parseNum($('#tapeHeightStd').value) * 
 function nearLimit(sum){ const s = tapeSheetLen(); return s > 0 && sum >= s * TAPE_NEAR_RATIO; }
 function overHeight(h){ const H = tapeSheetH(); return H > 0 && h > H; }
 // Площадь: (ширина, мм) × (высота, мм) → м² (÷ 1 000 000).
-function cutArea(cut){ return cutSum(cut) * parseNum(cut.height) / 1e6; }
+function cutArea(cut){ return cutSum(cut) * cutHeightMm(cut) / 1e6; }
 function tapeGroupArea(){ return tapeGroupSum() * groupHeightMm() / 1e6; }
 function tapeCutsArea(){ return tapeCuts.reduce((s,c)=> s + cutArea(c), 0); }
 function formatArea(n){ return (Number.isFinite(n) ? n : 0).toFixed(2); }
 function tapeCutsSum(){ return tapeCuts.reduce((s,c)=> s + cutSum(c), 0); }
 // Приводим отсечку к виду {name, items:[...]}. Поддерживаем старый формат (просто число).
 function normalizeCut(el){
-  if(el && Array.isArray(el.items)) return { name: String(el.name || ''), items: el.items.map(x=>parseNum(x)), height: parseNum(el.height) };
-  if(el && typeof el === 'object' && 'value' in el) return { name: String(el.name || ''), items: [parseNum(el.value)], height: parseNum(el.height) };
-  return { name: '', items: [parseNum(el)], height: 0 };
+  const hi = (el && Array.isArray(el.hItems)) ? el.hItems.map(x=>parseNum(x)) : [];
+  if(el && Array.isArray(el.items)) return { name: String(el.name || ''), items: el.items.map(x=>parseNum(x)), height: parseNum(el.height), hItems: hi };
+  if(el && typeof el === 'object' && 'value' in el) return { name: String(el.name || ''), items: [parseNum(el.value)], height: parseNum(el.height), hItems: hi };
+  return { name: '', items: [parseNum(el)], height: 0, hItems: hi };
 }
 function updateTapeTotals(){
   const g = tapeGroupSum(), c = tapeCutsSum();
@@ -221,16 +225,38 @@ function saveTapeSummary(grandMm, areaM2){
 const LAYOUT_EL_FILL = '#334155';    // единый цвет элемента
 const LAYOUT_EL_STROKE = '#64748b';  // обычная линия (сгиб и прочие)
 const LAYOUT_CUT_COLOR = '#38bdf8';  // яркая голубая линия реза (отрез)
+// Внутренние линии сгиба панели. wItems — сегменты вдоль исходной ширины
+// (вертикальные линии), hItems — вдоль исходной высоты (горизонтальные).
+// rot=true меняет оси местами (повёрнутая деталь на листе). Координаты и scale —
+// в единицах вызывающего (px для миниатюр, мм для экспорта).
+function foldLines(px, py, pw, ph, wItems, hItems, rot, scale){
+  const out = [];
+  const addAxis = (segs, alongOrigWidth)=>{
+    const horiz = alongOrigWidth ? !rot : rot;   // ось идёт горизонтально на листе?
+    let cum = 0;
+    (segs || []).forEach((s, idx, arr)=>{
+      cum += parseNum(s);
+      if(idx < arr.length - 1){
+        const off = cum * scale;
+        if(horiz) out.push({ x1: px + off, y1: py, x2: px + off, y2: py + ph });   // вертикальная линия
+        else      out.push({ x1: px, y1: py + off, x2: px + pw, y2: py + off });   // горизонтальная линия
+      }
+    });
+  };
+  addAxis(wItems, true);
+  addAxis(hItems, false);
+  return out;
+}
 function collectOtsechki(){
   const list = [];
   tapeCuts.forEach((cut, ci)=>{
-    const h = parseNum(cut.height);
+    const h = cutHeightMm(cut);
     const items = (cut.items || []).map(v=>parseNum(v)).filter(w=>w > 0);
-    if(h > 0 && items.length) list.push({ no: ci + 1, name: cut.name || '', h, items });
+    if(h > 0 && items.length) list.push({ no: ci + 1, name: cut.name || '', h, items, hItems: cutHItems(cut) });
   });
   const gh = groupHeightMm();
   const gi = tapeEntries.map(v=>parseNum(v)).filter(w=>w > 0);
-  if(gh > 0 && gi.length) list.push({ no: null, name: '', h: gh, items: gi });
+  if(gh > 0 && gi.length) list.push({ no: null, name: '', h: gh, items: gi, hItems: [] });
   return list;
 }
 // Развёртка одной отсечки. maxFs — предел кегля (в увеличении больше, поэтому
@@ -266,8 +292,27 @@ function buildStripSvg(ot, scale, dim, maxFs){
   const yT = oy.toFixed(2), yB = (oy + stripH).toFixed(2);
   let cuts = `<line x1="${ox.toFixed(2)}" y1="${yT}" x2="${ox.toFixed(2)}" y2="${yB}" stroke="${LAYOUT_CUT_COLOR}" stroke-width="2"></line>`
            + `<line x1="${(ox + stripW).toFixed(2)}" y1="${yT}" x2="${(ox + stripW).toFixed(2)}" y2="${yB}" stroke="${LAYOUT_CUT_COLOR}" stroke-width="2"></line>`;
-  // Высота — вдоль левой стенки (за пределами фигуры).
-  const heightTxt = `<text x="${(ox - 5).toFixed(2)}" y="${(oy + stripH / 2 + hfs * 0.35).toFixed(2)}" text-anchor="end" font-size="${hfs.toFixed(2)}" fill="#cbd5e1">${dim(ot.h)}</text>`;
+  // Горизонтальные линии сгиба (отвороты по высоте) на всю ширину.
+  let hfolds = '';
+  foldLines(ox, oy, stripW, stripH, [], ot.hItems || [], false, scale).forEach(l=>{
+    hfolds += `<line x1="${l.x1.toFixed(2)}" y1="${l.y1.toFixed(2)}" x2="${l.x2.toFixed(2)}" y2="${l.y2.toFixed(2)}" stroke="${LAYOUT_EL_STROKE}" stroke-width="0.8"></line>`;
+  });
+  // Высота — вдоль левой стенки. Если заданы отвороты — подписываем каждый сегмент,
+  // иначе общую высоту.
+  let heightTxt = '';
+  const hseg = (ot.hItems || []).filter(h=> h > 0);
+  if(hseg.length){
+    let cum = 0;
+    hseg.forEach(h=>{
+      const cy = oy + (cum + h / 2) * scale;
+      const label = dim(h);
+      const fs = Math.min(hfs, Math.max(1, (h * scale) / (0.62 * label.length + 0.3)));
+      if(fs >= 1) heightTxt += `<text x="${(ox - 5).toFixed(2)}" y="${(cy + fs * 0.35).toFixed(2)}" text-anchor="end" font-size="${fs.toFixed(2)}" fill="#cbd5e1">${label}</text>`;
+      cum += h;
+    });
+  } else {
+    heightTxt = `<text x="${(ox - 5).toFixed(2)}" y="${(oy + stripH / 2 + hfs * 0.35).toFixed(2)}" text-anchor="end" font-size="${hfs.toFixed(2)}" fill="#cbd5e1">${dim(ot.h)}</text>`;
+  }
   // Номер отсечки — по центру фигуры.
   let num = '';
   if(ot.no){
@@ -275,7 +320,7 @@ function buildStripSvg(ot, scale, dim, maxFs){
     num = `<text x="${(ox + stripW / 2).toFixed(2)}" y="${(oy + stripH / 2 + nfs * 0.35).toFixed(2)}" text-anchor="middle" font-size="${nfs.toFixed(2)}" font-weight="700" fill="#e2e8f0">№${ot.no}</text>`;
   }
   return `<svg width="${svgW.toFixed(1)}" height="${svgH.toFixed(1)}" style="border-radius:4px;background:#0b1221">`
-    + fills + ticks + cuts + lens + heightTxt + num + `</svg>`;
+    + fills + hfolds + ticks + cuts + lens + heightTxt + num + `</svg>`;
 }
 function renderLayout(){
   const host = $('#tapeLayout'); if(!host) return;
@@ -504,6 +549,10 @@ function buildNestSheetSvg(sheet, scale, dim, maxFs){
         }
         cxmm += w;
       });
+      // линии сгиба по высоте (отвороты); при повороте детали идут вертикально
+      foldLines(px, py, pw, ph, [], it.ot.hItems || [], it.rot, scale).forEach(l=>{
+        folds += `<line x1="${l.x1.toFixed(2)}" y1="${l.y1.toFixed(2)}" x2="${l.x2.toFixed(2)}" y2="${l.y2.toFixed(2)}" stroke="${LAYOUT_EL_STROKE}" stroke-width="0.6"></line>`;
+      });
       // контур реза панели (голубой / красный если 1500)
       cuts += `<rect x="${px.toFixed(2)}" y="${py.toFixed(2)}" width="${pw.toFixed(2)}" height="${ph.toFixed(2)}" fill="none" stroke="${cutStroke}" stroke-width="2"></rect>`;
       // номер отсечки по центру панели
@@ -596,15 +645,10 @@ function collectCutPlanPrimitives(){
       shelf.items.forEach(it=>{
         const px = ox + it.x, py = it.y;
         rects.push({ layer: 'CUT', x: px, y: py, w: it.pw, h: it.ph });
-        // линии сгиба — на внутренних границах сегментов; при повороте идут по высоте
-        let cum = 0;
-        it.ot.items.forEach((w, idx)=>{
-          cum += w;
-          if(idx < it.ot.items.length - 1){
-            if(it.rot) lines.push({ layer: 'FOLD', x1: px, y1: py + cum, x2: px + it.pw, y2: py + cum });
-            else       lines.push({ layer: 'FOLD', x1: px + cum, y1: py, x2: px + cum, y2: py + it.ph });
-          }
-        });
+        // линии сгиба — по ширине (вертикальные) и по высоте (горизонтальные);
+        // при повороте детали оси меняются местами. scale=1 (реальные мм).
+        foldLines(px, py, it.pw, it.ph, it.ot.items || [], it.ot.hItems || [], it.rot, 1)
+          .forEach(l=> lines.push({ layer: 'FOLD', x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2 }));
         if(it.ot.no){
           const fs = Math.min(EXPORT_LABEL_H, Math.max(20, Math.min(it.pw, it.ph) / 3));
           texts.push({ layer: 'LABEL', x: px + it.pw / 2, y: py + it.ph / 2, h: fs, dxf: 'N' + it.ot.no, svg: '№' + it.ot.no });
@@ -718,6 +762,7 @@ function renderTapeCuts(){
   $('#tapeCutsWrap').style.display = tapeCuts.length ? 'block' : 'none';
   const list = $('#tapeCutsList'); list.innerHTML = '';
   tapeCuts.forEach((cut, ci)=>{
+    if(!Array.isArray(cut.hItems)) cut.hItems = [];
     const block = document.createElement('div'); block.className = 'cut-block';
 
     // --- шапка: №, название (если задано), сумма, переключатель истории, удалить ---
@@ -728,11 +773,16 @@ function renderTapeCuts(){
     const nameView = document.createElement('span'); nameView.className = 'cut-name-view'; nameView.textContent = cut.name || '';
     const sumEl = document.createElement('b'); sumEl.className = 'cut-sum'; sumEl.textContent = formatTapeNumber(cutSum(cut) / unitFactor(sheetUnit));
     sumEl.classList.toggle('near-limit', nearLimit(cutSum(cut)));
-    // высота элемента этой отсечки (фиолетовый, если больше высоты листа)
+    // высота элемента этой отсечки (фиолетовый, если больше высоты листа).
+    // Если заданы отвороты по высоте (hItems) — поле показывает их сумму и
+    // становится «только для чтения» (высота = сумма отворотов).
+    const hHasSegs = cutHItems(cut).length > 0;
     const hWrap = document.createElement('span'); hWrap.className = 'cut-h-wrap';
-    hWrap.innerHTML = `<span class="muted small">выс.</span><input type="text" inputmode="decimal" placeholder="мм" value="${cut.height ? cut.height : ''}">`;
+    const hVal = hHasSegs ? formatTapeNumber(cutHeightMm(cut)) : (cut.height ? cut.height : '');
+    hWrap.innerHTML = `<span class="muted small">выс.</span><input type="text" inputmode="decimal" placeholder="мм" value="${hVal}"${hHasSegs ? ' readonly title="Высота = сумма отворотов ниже"' : ''}>`;
     const hInp = hWrap.querySelector('input');
-    hInp.classList.toggle('over-height', overHeight(parseNum(cut.height)));
+    if(hHasSegs) hInp.style.opacity = '0.7';
+    hInp.classList.toggle('over-height', overHeight(cutHeightMm(cut)));
     // площадь этой отсечки (м²) — сразу после номера: «№1 = X м²»
     const areaEl = document.createElement('span'); areaEl.className = 'cut-area';
     const setArea = ()=>{ areaEl.textContent = '= ' + formatArea(cutArea(cut)) + ' м²'; };
@@ -740,8 +790,13 @@ function renderTapeCuts(){
     on(hInp,'input', e=>{ cut.height = parseNum(e.target.value); hInp.classList.toggle('over-height', overHeight(cut.height)); setArea(); updateTapeTotals(); saveTapeCuts(); });
     const toggle = document.createElement('button');
     toggle.type = 'button'; toggle.className = 'btn ghost small'; toggle.style.padding = '2px 8px';
-    const setToggle = ()=>{ toggle.textContent = (cut._open ? '▾' : '▸') + ' история (' + cut.items.length + ')'; };
+    const setToggle = ()=>{ toggle.textContent = (cut._open ? '▾' : '▸') + ' ширина (' + cut.items.length + ')'; };
     setToggle();
+    // переключатель списка сегментов высоты (горизонтальные отвороты)
+    const hToggle = document.createElement('button');
+    hToggle.type = 'button'; hToggle.className = 'btn ghost small'; hToggle.style.padding = '2px 8px';
+    const setHToggle = ()=>{ hToggle.textContent = (cut._hopen ? '▾' : '▸') + ' высота (' + cut.hItems.length + ')'; };
+    setHToggle();
     const del = document.createElement('button'); del.type = 'button'; del.className = 'btn ghost'; del.textContent = '✕';
     del.addEventListener('click', e=>{ e.preventDefault(); tapeCuts.splice(ci, 1); saveTapeCuts(); renderTapeCuts(); });
 
@@ -769,7 +824,7 @@ function renderTapeCuts(){
     nameView.addEventListener('click', e=>{ e.preventDefault(); startNameEdit(); });
 
     const spacer = document.createElement('span'); spacer.style.flex = '1';
-    head.appendChild(noBtn); head.appendChild(areaEl); head.appendChild(nameView); head.appendChild(spacer); head.appendChild(sumEl); head.appendChild(hWrap); head.appendChild(toggle); head.appendChild(del);
+    head.appendChild(noBtn); head.appendChild(areaEl); head.appendChild(nameView); head.appendChild(spacer); head.appendChild(sumEl); head.appendChild(hWrap); head.appendChild(toggle); head.appendChild(hToggle); head.appendChild(del);
     block.appendChild(head);
 
     // --- история чисел (свёрнута по умолчанию), каждое со своим номером ---
@@ -787,6 +842,27 @@ function renderTapeCuts(){
     block.appendChild(items);
 
     toggle.addEventListener('click', e=>{ e.preventDefault(); cut._open = !cut._open; items.style.display = cut._open ? 'flex' : 'none'; setToggle(); });
+
+    // --- сегменты высоты (горизонтальные отвороты), в мм; сумма = высота ---
+    const hitems = document.createElement('div'); hitems.className = 'cut-items'; hitems.style.display = cut._hopen ? 'flex' : 'none';
+    const refreshH = ()=>{
+      const sum = cutHeightMm(cut);
+      if(cutHItems(cut).length){ hInp.value = formatTapeNumber(sum); hInp.readOnly = true; hInp.style.opacity = '0.7'; }
+      hInp.classList.toggle('over-height', overHeight(sum));
+      setArea(); updateTapeTotals(); saveTapeCuts();
+    };
+    cut.hItems.forEach((val, ii)=>{
+      const item = document.createElement('span'); item.className = 'item';
+      item.innerHTML = `<span class="item-no">${ii + 1}.</span><input type="text" inputmode="decimal" placeholder="мм" value="${formatTapeNumber(parseNum(val))}"><button class="btn ghost">✕</button>`;
+      on(item.querySelector('input'),'input', e=>{ cut.hItems[ii] = parseNum(e.target.value); refreshH(); });
+      item.querySelector('button').addEventListener('click', e=>{ e.preventDefault(); cut.hItems.splice(ii, 1); saveTapeCuts(); renderTapeCuts(); });
+      hitems.appendChild(item);
+    });
+    const hAddBtn = document.createElement('button'); hAddBtn.type = 'button'; hAddBtn.className = 'btn ghost small'; hAddBtn.style.padding = '2px 8px'; hAddBtn.textContent = '＋ отворот';
+    hAddBtn.addEventListener('click', e=>{ e.preventDefault(); cut._hopen = true; cut.hItems.push(0); saveTapeCuts(); renderTapeCuts(); });
+    hitems.appendChild(hAddBtn);
+    block.appendChild(hitems);
+    hToggle.addEventListener('click', e=>{ e.preventDefault(); cut._hopen = !cut._hopen; hitems.style.display = cut._hopen ? 'flex' : 'none'; setHToggle(); });
 
     list.appendChild(block);
   });
