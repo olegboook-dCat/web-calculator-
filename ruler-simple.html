@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Паскаль — Линейка</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .simple-teaser{border:1px dashed #334155;background:#0b1221;border-radius:12px;padding:12px 14px;margin-top:14px}
+    .simple-teaser .t-list{margin:6px 0 10px;color:#cbd5e1}
+    .simple-teaser .t-list li{margin:2px 0}
+    .simple-teaser .lock{opacity:.75}
+    .h-row{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+    .h-row input{max-width:120px}
+    .pill-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <nav class="nav">
+      <a href="index.html">Быстрый расчёт</a>
+      <a href="calculator.html">Полный расчёт</a>
+      <a href="ruler-simple.html" class="active">Линейка</a>
+      <a href="ruler.html">Линейка +</a>
+    </nav>
+
+    <div class="card">
+      <h1 style="margin:0 0 4px;font-size:20px">📏 Линейка</h1>
+      <div class="muted small" style="margin-bottom:10px">
+        Простой замер: складывайте ширины, задайте высоту и отсекайте — список
+        запоминается. Картинка раскроя, раскладка (КИМ) и подсчёт листов —
+        в полной «Линейка +».
+      </div>
+
+      <!-- 1. Ширина -->
+      <div class="muted small" style="margin-bottom:2px">Ширина (складывайте числа)</div>
+      <div class="actions" style="align-items:center">
+        <input type="text" id="wInput" inputmode="decimal" placeholder="Ширина, мм" style="max-width:200px">
+        <button class="btn" id="wAdd">＋ Добавить</button>
+      </div>
+      <div class="table-scroll">
+        <table id="wTbl">
+          <thead><tr><th>#</th><th>Ширина, мм</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <!-- 2. Высота -->
+      <div class="h-row">
+        <span class="muted small">Высота, мм</span>
+        <input type="text" id="hInput" inputmode="decimal" placeholder="мм">
+      </div>
+
+      <!-- итоги текущей группы -->
+      <div class="pill-row">
+        <span class="pill">Ширина всего: <b id="wSum">0</b> <span class="muted small">мм</span></span>
+        <span class="pill">Площадь: <b id="gArea">0.00</b> м²</span>
+      </div>
+
+      <!-- 3. Отсечь -->
+      <div class="actions" style="margin-top:10px">
+        <button class="btn" id="cutBtn" style="flex:1;justify-content:center;background:#6e2230;border-color:#7f1d1d;color:#fecaca">✂ Отсечь (запомнить)</button>
+      </div>
+
+      <!-- список отсечек -->
+      <div id="cutsWrap" style="margin-top:12px;display:none">
+        <div class="muted small" style="margin-bottom:2px">Отсечки</div>
+        <div id="cutsList"></div>
+        <div class="pill-row">
+          <span class="pill">Отсечек: <b id="cutsCount">0</b></span>
+          <span class="pill">Сумма ширин: <b id="cutsSum">0</b> <span class="muted small">мм</span></span>
+          <span class="pill">Итого площадь: <b id="cutsArea">0.00</b> м²</span>
+        </div>
+        <div class="actions" style="margin-top:10px">
+          <button class="btn ghost small" id="clearBtn" style="padding:4px 10px">Очистить все отсечки</button>
+        </div>
+      </div>
+
+      <!-- тизер платных функций -->
+      <div class="simple-teaser">
+        <div style="font-weight:600;color:#e5e7eb">Нужно больше? — «Линейка +»</div>
+        <ul class="t-list">
+          <li class="lock">🔒 Картинка раскроя (развёртка отсечек)</li>
+          <li class="lock">🔒 Раскладка на листах — «тетрис» и КИМ (% использования)</li>
+          <li class="lock">🔒 Сколько всего листов купить</li>
+          <li class="lock">🔒 Чертёж для фрезера (DXF / SVG)</li>
+        </ul>
+        <a class="btn" id="toFull" href="ruler.html">Открыть «Линейка +» →</a>
+        <div class="muted small" style="margin-top:6px">Ваши отсечки перейдут туда автоматически — список общий.</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+// --- Простая «Линейка» (лист 3). Данные общие с полной «Линейка +» ------------
+// Отсечки хранятся в том же ключе, что и полная версия, поэтому сделанное здесь
+// сразу доступно на странице «Линейка +» (раскрой, КИМ, листы, чертёж).
+const TAPE_ENTRIES_KEY = 'facadeTapeCalculatorEntries'; // текущая группа (мм)
+const TAPE_CUTS_KEY = 'facadeTapeCalculatorCuts';       // отсечки (общие)
+const $ = s => document.querySelector(s);
+function parseNum(v){
+  if(typeof v === 'number') return v;
+  if(v == null) return 0;
+  const n = parseFloat(String(v).replace(',', '.').replace(/[^0-9.\-]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+}
+function fmt(n){ return String(Math.round(n * 1000) / 1000); }
+function fmtArea(n){ return (Number.isFinite(n) ? n : 0).toFixed(2); }
+
+// state
+let entries = [];      // текущая группа ширин (мм)
+let height = 0;        // высота текущей группы (мм)
+let cuts = [];         // отсечки [{name, items:[мм], height, ...}]
+
+function loadJSON(key){ try{ const r = localStorage.getItem(key); return r ? JSON.parse(r) : null; }catch(e){ return null; } }
+function loadState(){
+  const e = loadJSON(TAPE_ENTRIES_KEY);
+  if(Array.isArray(e)) entries = e.map(parseNum).filter(x=> x >= 0);
+  const c = loadJSON(TAPE_CUTS_KEY);
+  if(Array.isArray(c)) cuts = c.map(normalizeCut);
+}
+// Приводим отсечку к общему виду (совместимо с полной версией).
+function normalizeCut(el){
+  if(el && Array.isArray(el.items))
+    return { name: String(el.name || ''), items: el.items.map(parseNum), height: parseNum(el.height),
+             hItems: Array.isArray(el.hItems) ? el.hItems.map(parseNum) : [],
+             angEdge: 'none', angDeg: 0, angCorner: 'top', angMode: 'edge', angAxis: 'height', angW2: 0, _open: !!(el && el._open) };
+  return { name: '', items: [parseNum(el)], height: 0, hItems: [], angEdge:'none', angDeg:0, angCorner:'top', angMode:'edge', angAxis:'height', angW2:0 };
+}
+// Сохраняем в общий формат — так же, как полная версия.
+function saveCuts(){
+  try{ localStorage.setItem(TAPE_CUTS_KEY, JSON.stringify(cuts.map(c=>({
+    name: c.name || '', items: c.items, height: c.height || 0, hItems: Array.isArray(c.hItems) ? c.hItems : [],
+    angEdge: 'none', angDeg: 0, angCorner: 'top', angMode: 'edge', angAxis: 'height', angW2: 0
+  })))); }catch(e){}
+}
+function saveEntries(){ try{ localStorage.setItem(TAPE_ENTRIES_KEY, JSON.stringify(entries)); }catch(e){} }
+
+function groupSum(){ return entries.reduce((s, w)=> s + parseNum(w), 0); }
+function cutSum(c){ return (c.items || []).reduce((s, w)=> s + parseNum(w), 0); }
+function cutsWidthSum(){ return cuts.reduce((s, c)=> s + cutSum(c), 0); }
+function cutArea(c){ return cutSum(c) * parseNum(c.height) / 1e6; }
+function cutsArea(){ return cuts.reduce((s, c)=> s + cutArea(c), 0); }
+
+function updateTotals(){
+  $('#wSum').textContent = fmt(groupSum());
+  $('#gArea').textContent = fmtArea(groupSum() * height / 1e6);
+  $('#cutsCount').textContent = String(cuts.length);
+  $('#cutsSum').textContent = fmt(cutsWidthSum());
+  $('#cutsArea').textContent = fmtArea(cutsArea());
+  $('#cutsWrap').style.display = cuts.length ? 'block' : 'none';
+}
+
+// --- текущая группа (таблица ширин) ---
+function renderEntries(){
+  const tb = $('#wTbl tbody'); tb.innerHTML = '';
+  entries.forEach((val, i)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${i + 1}</td>`
+      + `<td><input type="text" inputmode="decimal" value="${fmt(parseNum(val))}"></td>`
+      + `<td><button class="btn ghost del-x" title="Удалить">🗑</button></td>`;
+    tr.querySelector('input').addEventListener('input', e=>{ entries[i] = parseNum(e.target.value); updateTotals(); saveEntries(); });
+    tr.querySelector('button').addEventListener('click', e=>{ e.preventDefault(); entries.splice(i, 1); renderEntries(); updateTotals(); saveEntries(); });
+    tb.appendChild(tr);
+  });
+  updateTotals();
+}
+function addEntry(){
+  const raw = $('#wInput').value;
+  if(raw.trim() === '') return;
+  entries.push(parseNum(raw));
+  saveEntries(); renderEntries();
+  $('#wInput').value = ''; $('#wInput').focus();
+}
+
+// --- отсечки ---
+function renderCuts(){
+  const list = $('#cutsList'); list.innerHTML = '';
+  cuts.forEach((cut, ci)=>{
+    if(!Array.isArray(cut.items)) cut.items = [];
+    const block = document.createElement('div'); block.className = 'cut-block';
+    const head = document.createElement('div'); head.className = 'cut-head';
+
+    const noBtn = document.createElement('button');
+    noBtn.type = 'button'; noBtn.className = 'cut-no'; noBtn.textContent = '№' + (ci + 1);
+    noBtn.title = 'Нажмите, чтобы задать/изменить название';
+    const nameView = document.createElement('span'); nameView.className = 'cut-name-view'; nameView.textContent = cut.name || '';
+    nameView.title = 'Нажмите, чтобы изменить название';
+    const areaEl = document.createElement('span'); areaEl.className = 'cut-area';
+    const setArea = ()=>{ areaEl.textContent = '= ' + fmtArea(cutArea(cut)) + ' м²'; };
+    setArea();
+    const spacer = document.createElement('span'); spacer.style.flex = '1';
+    const sumEl = document.createElement('b'); sumEl.className = 'cut-sum';
+    const setSum = ()=>{ sumEl.textContent = fmt(cutSum(cut)); };
+    setSum();
+
+    const del = document.createElement('button'); del.type = 'button'; del.className = 'btn ghost cut-del'; del.textContent = '🗑'; del.title = 'Удалить отсечку';
+    del.addEventListener('click', e=>{ e.preventDefault();
+      const label = cut.name ? '«' + cut.name + '»' : ('№' + (ci + 1));
+      if(!window.confirm('Удалить отсечку ' + label + '? Действие нельзя отменить.')) return;
+      cuts.splice(ci, 1); saveCuts(); renderCuts(); updateTotals(); });
+
+    // высота отсечки
+    const hWrap = document.createElement('span'); hWrap.className = 'cut-h-wrap';
+    hWrap.innerHTML = `<span class="muted small">выс.</span><input type="text" inputmode="decimal" placeholder="мм" value="${cut.height ? fmt(cut.height) : ''}">`;
+    const hInp = hWrap.querySelector('input');
+    hInp.addEventListener('input', e=>{ cut.height = parseNum(e.target.value); setArea(); saveCuts(); updateTotals(); });
+
+    // переключатель списка ширин
+    const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'btn ghost small'; toggle.style.padding = '2px 8px';
+    const setToggle = ()=>{ toggle.textContent = (cut._open ? '▾' : '▸') + ' ширина (' + cut.items.length + ')'; };
+    setToggle();
+
+    // клик по номеру/названию → правка названия на месте
+    const startNameEdit = ()=>{
+      const inp = document.createElement('input');
+      inp.type = 'text'; inp.className = 'cut-name-edit'; inp.placeholder = 'Название'; inp.value = cut.name || '';
+      nameView.replaceWith(inp); inp.focus(); inp.select();
+      let done = false;
+      const finish = (save)=>{ if(done) return; done = true;
+        if(save){ cut.name = inp.value.trim(); saveCuts(); }
+        nameView.textContent = cut.name || ''; inp.replaceWith(nameView); };
+      inp.addEventListener('keydown', ev=>{ if(ev.key === 'Enter'){ ev.preventDefault(); finish(true); } else if(ev.key === 'Escape'){ ev.preventDefault(); finish(false); } });
+      inp.addEventListener('blur', ()=> finish(true));
+    };
+    noBtn.addEventListener('click', e=>{ e.preventDefault(); startNameEdit(); });
+    nameView.addEventListener('click', e=>{ e.preventDefault(); startNameEdit(); });
+
+    head.appendChild(noBtn); head.appendChild(areaEl); head.appendChild(nameView);
+    head.appendChild(spacer); head.appendChild(sumEl); head.appendChild(del);
+    head.appendChild(hWrap); head.appendChild(toggle);
+    block.appendChild(head);
+
+    // список ширин (свёрнут по умолчанию)
+    const items = document.createElement('div'); items.className = 'cut-items'; items.style.display = cut._open ? 'flex' : 'none';
+    cut.items.forEach((val, ii)=>{
+      const item = document.createElement('span'); item.className = 'item';
+      item.innerHTML = `<span class="item-no">${ii + 1}.</span>`
+        + `<input type="text" inputmode="decimal" value="${fmt(parseNum(val))}">`
+        + `<button class="btn ghost del-x" title="Удалить">🗑</button>`;
+      item.querySelector('input').addEventListener('input', e=>{ cut.items[ii] = parseNum(e.target.value); setSum(); setArea(); saveCuts(); updateTotals(); });
+      item.querySelector('button').addEventListener('click', e=>{ e.preventDefault(); cut.items.splice(ii, 1); saveCuts(); renderCuts(); updateTotals(); });
+      items.appendChild(item);
+    });
+    const addBtn = document.createElement('button'); addBtn.type = 'button'; addBtn.className = 'btn ghost small'; addBtn.style.padding = '2px 8px'; addBtn.textContent = '＋ число';
+    addBtn.addEventListener('click', e=>{ e.preventDefault(); cut._open = true; cut.items.push(0); saveCuts(); renderCuts(); });
+    items.appendChild(addBtn);
+    block.appendChild(items);
+    toggle.addEventListener('click', e=>{ e.preventDefault(); cut._open = !cut._open; items.style.display = cut._open ? 'flex' : 'none'; setToggle(); });
+
+    list.appendChild(block);
+  });
+  updateTotals();
+}
+
+// Отсечь: текущая группа → новая отсечка (запоминаем список ширин и высоту).
+function cut(){
+  const items = entries.map(parseNum).filter(w=> w > 0);
+  if(!items.length){ $('#wInput').focus(); return; }
+  cuts.push({ name: '', items, height: height, hItems: [], angEdge:'none', angDeg:0, angCorner:'top', angMode:'edge', angAxis:'height', angW2:0 });
+  entries = []; height = 0; $('#hInput').value = '';
+  saveCuts(); saveEntries();
+  renderEntries(); renderCuts(); updateTotals();
+  $('#wInput').focus();
+}
+
+// init
+loadState();
+$('#hInput').value = height ? fmt(height) : '';
+$('#wAdd').addEventListener('click', e=>{ e.preventDefault(); addEntry(); });
+$('#wInput').addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); addEntry(); } });
+$('#hInput').addEventListener('input', e=>{ height = parseNum(e.target.value); updateTotals(); });
+$('#cutBtn').addEventListener('click', e=>{ e.preventDefault(); cut(); });
+$('#clearBtn').addEventListener('click', e=>{ e.preventDefault();
+  if(!window.confirm('Удалить все отсечки? Действие нельзя отменить.')) return;
+  cuts = []; saveCuts(); renderCuts(); updateTotals(); });
+renderEntries(); renderCuts(); updateTotals();
+</script>
+</body>
+</html>
